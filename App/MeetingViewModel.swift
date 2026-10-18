@@ -42,6 +42,14 @@ final class MeetingViewModel: Identifiable {
 
     var isLive: Bool { session != nil }
     var isRecording: Bool { state == .recording || state == .starting }
+    /// Holds (or is about to hold) the mic and system audio: includes a live session that hasn't started yet.
+    var isCapturing: Bool {
+        guard isLive else { return false }
+        switch state {
+        case .idle, .starting, .recording, .stopping: return true
+        case .summarizing, .finished, .failed: return false
+        }
+    }
     var canAsk: Bool { qa != nil }
     var now: TimeInterval { isRecording ? clock.now : transcript.duration }
 
@@ -59,6 +67,12 @@ final class MeetingViewModel: Identifiable {
         self.state = state
         self.clock = session?.clock ?? clock ?? SessionClock()
         self.onFinish = onFinish
+        if let session {
+            let events = session.events()
+            Task { [weak self] in
+                for await event in events { self?.handle(event) }
+            }
+        }
     }
 
     /// Loads a finished meeting for review.
@@ -78,10 +92,6 @@ final class MeetingViewModel: Identifiable {
 
     func start() async {
         guard let session else { return }
-        let events = session.events()
-        Task { [weak self] in
-            for await event in events { self?.handle(event) }
-        }
         do {
             try await session.start()
         } catch {
@@ -91,6 +101,11 @@ final class MeetingViewModel: Identifiable {
 
     func stop() async {
         await session?.stop()
+    }
+
+    /// Returns once audio is released; the summary finishes in the background.
+    func stopCapture() async {
+        await session?.stopCapture()
     }
 
     private func handle(_ event: SessionEvent) {

@@ -75,10 +75,19 @@ private struct EchoSummarizer: MeetingSummarizer {
     }
 }
 
+/// Doesn't return until `gate` finishes, like a slow LLM call.
+private struct GatedSummarizer: MeetingSummarizer {
+    let gate: AsyncStream<Void>
+    func summarize(meeting: Meeting, transcript: Transcript, notes: [Note]) async throws -> MeetingSummary {
+        for await _ in gate {}
+        return MeetingSummary(meetingID: meeting.id, templateID: meeting.templateID, overview: "late")
+    }
+}
+
 @Suite struct MeetingSessionTests {
-    private func environment(_ store: MemoryStore, sources: [any AudioSource]) -> SessionEnvironment {
+    private func environment(_ store: MemoryStore, sources: [any AudioSource], summarizer: any MeetingSummarizer = EchoSummarizer()) -> SessionEnvironment {
         SessionEnvironment(
-            makeSources: { _ in sources }, transcriber: FakeTranscriptionProvider(segmentDuration: 2), summarizer: EchoSummarizer(),
+            makeSources: { _ in sources }, transcriber: FakeTranscriptionProvider(segmentDuration: 2), summarizer: summarizer,
             meetings: store, transcripts: store, notes: store, summaries: store, audioFiles: store)
     }
 
@@ -138,6 +147,47 @@ private struct EchoSummarizer: MeetingSummarizer {
         gate.continuation.finish()
         try await starting.value
         #expect(await session.state == .finished)
+    }
+
+    @Test func stopCaptureReturnsBeforeSummaryFinishes() async throws {
+        let store = MemoryStore()
+        let gate = AsyncStream<Void>.makeStream()
+        let session = MeetingSession(
+            meeting: Meeting(title: "T"), scope: .allApps,
+            environment: environment(store, sources: [FakeAudioSource(.mic)], summarizer: GatedSummarizer(gate: gate.stream)))
+        try await session.start()
+
+        await session.stopCapture()
+        #expect(await session.state == .summarizing)
+        #expect(await store.segments(meetingID: session.meetingID).count == 5)
+
+        let events = session.events()
+        gate.continuation.finish()
+        for await case .state(let s) in events where s == .finished { break }
+        #expect(await store.summary(meetingID: session.meetingID)?.overview == "late")
+    }
+
+    @Test func stopCaptureDuringStartWaitsForSourcesThenStops() async throws {
+        let store = MemoryStore()
+        let gate = AsyncStream<Void>.makeStream()
+        let session = MeetingSession(meeting: Meeting(title: "T"), scope: .allApps, environment: environment(store, sources: [SlowAudioSource(gate.stream)]))
+        let starting = Task { try await session.start() }
+        while await session.state != .starting { await Task.yield() }
+
+        let stopping = Task { await session.stopCapture() }
+        gate.continuation.finish()
+        await stopping.value
+        try await starting.value
+        #expect(await session.state == .finished)
+    }
+
+    @Test func stopCaptureBeforeStartCancels() async throws {
+        let store = MemoryStore()
+        let session = MeetingSession(meeting: Meeting(title: "T"), scope: .allApps, environment: environment(store, sources: [FakeAudioSource(.mic)]))
+        await session.stopCapture()
+        try await session.start()
+        if case .failed = await session.state {} else { Issue.record("expected failed state") }
+        #expect(await store.meeting(id: session.meetingID) == nil)
     }
 
     @Test func failsWhenNoSourceStarts() async {

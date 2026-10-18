@@ -28,8 +28,10 @@ final class AppModel {
     @ObservationIgnored private let detector = MicTriggeredMeetingDetector()
     @ObservationIgnored private let prompter = MeetingPrompter()
     @ObservationIgnored private let meetingWindow = MeetingWindowController()
+    @ObservationIgnored private var isSwitchingMeetings = false
 
     var isRecording: Bool { current?.isRecording == true }
+    var isCapturing: Bool { current?.isCapturing == true }
 
     init() {
         let support = URL.applicationSupportDirectory.appending(path: "Scribe", directoryHint: .isDirectory)
@@ -58,7 +60,7 @@ final class AppModel {
             switch event {
             case .started:
                 detectedMeeting = await detector.currentMeeting
-                if let meeting = detectedMeeting, settings.promptWhenMeetingDetected, !isRecording {
+                if let meeting = detectedMeeting, settings.promptWhenMeetingDetected, !isCapturing {
                     prompter.promptRecord(app: meeting.app)
                 }
             case .ended:
@@ -71,11 +73,36 @@ final class AppModel {
 
     // MARK: Meetings
 
+    /// Scribe records one meeting at a time. If one is still capturing, ask before stopping it.
     func startMeeting(from detected: DetectedMeeting? = nil) {
-        if isRecording {
+        guard !isSwitchingMeetings else { return }
+        guard let current, current.isCapturing else {
+            beginMeeting(from: detected)
+            return
+        }
+        guard confirmStopping(current) else {
             showCurrentMeeting()
             return
         }
+        isSwitchingMeetings = true
+        Task {
+            await current.stopCapture()
+            isSwitchingMeetings = false
+            beginMeeting(from: detected)
+        }
+    }
+
+    private func confirmStopping(_ current: MeetingViewModel) -> Bool {
+        NSApp.activate()
+        let alert = NSAlert()
+        alert.messageText = "Stop the current recording?"
+        alert.informativeText = "“\(current.meeting.title)” is still recording. Scribe records one meeting at a time; its summary will finish in the background."
+        alert.addButton(withTitle: "Stop and Start New")
+        alert.addButton(withTitle: "Keep Recording")
+        return alert.runModal() == .alertFirstButtonReturn
+    }
+
+    private func beginMeeting(from detected: DetectedMeeting?) {
         prompter.withdrawRecordPrompt()
         do {
             let transcriber = try makeProvider(Providers.transcription, id: settings.transcriptionProviderID)
@@ -98,6 +125,7 @@ final class AppModel {
             Task {
                 guard await MicrophoneSource.requestPermission() else {
                     vm.warnings.append("Microphone access is off. Enable it in System Settings ▸ Privacy & Security ▸ Microphone.")
+                    await vm.stopCapture()  // Cancels the unstarted session so it doesn't block the next one.
                     return
                 }
                 await vm.start()
@@ -122,7 +150,7 @@ final class AppModel {
                 let vm = try await MeetingViewModel.review(
                     meeting, transcripts: database.transcripts, noteRepository: database.notes, summaries: database.summaries,
                     qa: llm.map { QAEngine(llm: $0) }, summarizer: llm.map { LLMSummarizer(llm: $0) })
-                if !isRecording { current = vm }
+                if !isCapturing { current = vm }
                 meetingWindow.show(vm, app: self)
             } catch {
                 lastError = error.localizedDescription

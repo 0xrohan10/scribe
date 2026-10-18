@@ -84,6 +84,8 @@ public actor MeetingSession {
     private var pumps: [Task<Void, Never>] = []
     /// `stop()` arrived while sources were still starting; `start()` stops once they're up.
     private var stopRequested = false
+    /// Callers of `stopCapture()` waiting for audio to be released.
+    private var captureWaiters: [CheckedContinuation<Void, Never>] = []
 
     public init(meeting: Meeting, scope: SystemAudioScope, environment: SessionEnvironment, clock: SessionClock = SessionClock()) {
         self.meetingID = meeting.id
@@ -177,6 +179,27 @@ public actor MeetingSession {
         broadcaster.finish()
     }
 
+    /// Stops recording and returns once the audio sources are released and the transcript is drained.
+    /// Summarizing carries on in the background, so a new session can start right away.
+    /// A session that was never started is cancelled and can't be started afterwards.
+    public func stopCapture() async {
+        switch state {
+        case .idle:
+            transition(to: .failed("Cancelled before recording started."))
+            broadcaster.finish()
+            return
+        case .summarizing, .finished, .failed:
+            return
+        case .starting:
+            stopRequested = true
+        case .recording:
+            Task { await self.stop() }
+        case .stopping:
+            break
+        }
+        await withCheckedContinuation { captureWaiters.append($0) }
+    }
+
     private func pump(_ segments: AsyncThrowingStream<TranscriptSegment, Error>) async {
         do {
             for try await segment in segments { await receive(segment) }
@@ -217,5 +240,12 @@ public actor MeetingSession {
     private func transition(to new: SessionState) {
         state = new
         broadcaster.send(.state(new))
+        switch new {
+        case .summarizing, .finished, .failed:
+            captureWaiters.forEach { $0.resume() }
+            captureWaiters = []
+        default:
+            break
+        }
     }
 }
