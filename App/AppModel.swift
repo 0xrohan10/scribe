@@ -213,7 +213,8 @@ final class AppModel {
     private func makeQA(_ llm: any LLMProvider) -> QAEngine {
         // A misconfigured search provider (e.g. no API key) falls back to the AI provider's own search.
         let webSearch = settings.webSearchProviderID.flatMap { try? makeProvider(Providers.webSearch, id: $0) }
-        return QAEngine(llm: llm, webSearch: webSearch)
+        let searchGate = settings.searchGateProviderID.flatMap { try? makeProvider(Providers.searchGate, id: $0) }
+        return QAEngine(llm: llm, webSearch: webSearch, searchGate: searchGate)
     }
 
     private func systemAudioScope(for detected: DetectedMeeting?) -> SystemAudioScope {

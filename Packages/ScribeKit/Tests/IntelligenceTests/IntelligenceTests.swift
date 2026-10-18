@@ -118,6 +118,17 @@ import Testing
         #expect(sources == [WebSource(title: "Pricing", url: URL(string: "https://example.com/pricing")!)])
     }
 
+    @Test(arguments: [(GateAnswer.no, false), (.yes, true), (.fails, true)])
+    func gateDecidesWhetherToSearch(gate: GateAnswer, searched: Bool) async throws {
+        let llm = RecordingLLM()
+        let engine = QAEngine(llm: llm, webSearch: FakeSearch(), searchGate: FakeGate(answer: gate))
+        for try await _ in engine.answer("What did we decide on pricing?", transcript: transcript, now: 61) {}
+        let request = try #require(await llm.last)
+        #expect(request.messages.last?.content.contains("<web_results>") == searched)
+        // Declining the configured search doesn't fall back to the provider's hosted search.
+        #expect(request.tools.isEmpty)
+    }
+
     @Test func rollingContextTrimsToWholeLines() async {
         let context = await RollingTranscriptContext(maxCharacters: 40).context(for: "", transcript: transcript)
         #expect(context.hasPrefix("[…earlier transcript omitted…]\n["))
@@ -157,6 +168,42 @@ private struct FakeSearch: WebSearchTool {
     let id = "fake"
     func search(_ query: String, maxResults: Int) async throws -> [WebSearchResult] {
         [WebSearchResult(title: "Pricing", url: URL(string: "https://example.com/pricing")!, snippet: "$10/seat")]
+    }
+}
+
+enum GateAnswer: Sendable { case yes, no, fails }
+
+private struct FakeGate: SearchGate {
+    let answer: GateAnswer
+    func shouldSearch(question: String, transcript: Transcript) async throws -> Bool {
+        switch answer {
+        case .yes: true
+        case .no: false
+        case .fails: throw LLMError.api("down")
+        }
+    }
+}
+
+@Suite struct JevSearchGateTests {
+    @Test func buildsNoulRequestWithQuestionAndTranscript() async throws {
+        let gate = JevSearchGate(config: ProviderConfig(apiKey: "tk"))
+        let transcript = Transcript(segments: [TranscriptSegment(speaker: .them, text: "We use Acme.", start: 3, end: 4, isFinal: true)])
+        let request = try await gate.urlRequest(question: "What does Acme cost?", transcript: transcript)
+        #expect(request.url?.absoluteString == "https://api.typesafe.ai/v1/systemone")
+        #expect(request.value(forHTTPHeaderField: "Authorization") == "Bearer tk")
+        let body = try JSONSerialization.jsonObject(with: request.httpBody!) as! [String: Any]
+        #expect(body["model"] as? String == "jev-latest")
+        let state = body["state"] as! [String: String]
+        #expect(state == ["question": "What does Acme cost?", "transcript": "[0:03] Them: We use Acme."])
+        let question = (body["questions"] as! [String: [String: Any]])["needs_web"]!
+        #expect(question["type"] as? String == "noul")
+    }
+
+    @Test func decodesProbabilityAndErrors() throws {
+        let ok = #"{"model":"jev-1.13.0","answers":{"needs_web":{"type":"noul","noul":0.82}},"usage":{"input_tokens":300,"output_tokens":20}}"#
+        #expect(try JevSearchGate.decodeProbability(Data(ok.utf8), status: 200) == 0.82)
+        #expect(throws: LLMError.self) { try JevSearchGate.decodeProbability(Data(#"{"error":"bad key"}"#.utf8), status: 401) }
+        #expect(throws: LLMError.self) { try JevSearchGate.decodeProbability(Data(#"{"answers":{}}"#.utf8), status: 200) }
     }
 }
 

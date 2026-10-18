@@ -24,4 +24,10 @@ enum Providers {
         r.register(.init(id: "parallel", displayName: "Parallel", needsAPIKey: true, defaultBaseURL: ParallelSearchTool.defaultBaseURL)) { ParallelSearchTool(config: $0) }
         return r
     }()
+
+    static let searchGate: ProviderRegistry<any SearchGate> = {
+        var r = ProviderRegistry<any SearchGate>()
+        r.register(.init(id: "jev", displayName: "TypeSafe Jev", needsAPIKey: true, defaultModel: JevSearchGate.defaultModel, defaultBaseURL: JevSearchGate.defaultBaseURL)) { JevSearchGate(config: $0) }
+        return r
+    }()
 }

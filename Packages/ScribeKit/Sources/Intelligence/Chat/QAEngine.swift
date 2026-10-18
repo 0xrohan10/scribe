@@ -7,6 +7,11 @@ public protocol TranscriptContextProvider: Sendable {
     func context(for question: String, transcript: Transcript) async -> String
 }
 
+/// Decides whether a question needs a client-side web search before it's made.
+public protocol SearchGate: Sendable {
+    func shouldSearch(question: String, transcript: Transcript) async throws -> Bool
+}
+
 /// The most recent `maxCharacters` of transcript (≈ 4 chars/token).
 public struct RollingTranscriptContext: TranscriptContextProvider {
     public var maxCharacters: Int
@@ -28,17 +33,21 @@ public struct RollingTranscriptContext: TranscriptContextProvider {
 public struct QAEngine: Sendable {
     public var llm: any LLMProvider
     public var webSearch: (any WebSearchTool)?
+    /// Decides per question whether `webSearch` is worth calling. Without one, every question searches.
+    public var searchGate: (any SearchGate)?
     public var context: any TranscriptContextProvider
     public var params: ModelParams
     /// How far back the local "just said" answers look.
     public var recentWindow: TimeInterval
 
     public init(
-        llm: any LLMProvider, webSearch: (any WebSearchTool)? = nil, context: any TranscriptContextProvider = RollingTranscriptContext(),
+        llm: any LLMProvider, webSearch: (any WebSearchTool)? = nil, searchGate: (any SearchGate)? = nil,
+        context: any TranscriptContextProvider = RollingTranscriptContext(),
         params: ModelParams = .init(maxTokens: 1024), recentWindow: TimeInterval = 30
     ) {
         self.llm = llm
         self.webSearch = webSearch
+        self.searchGate = searchGate
         self.context = context
         self.params = params
         self.recentWindow = recentWindow
@@ -54,7 +63,7 @@ public struct QAEngine: Sendable {
             }
         }
 
-        let (llm, webSearch, contextProvider, params) = (llm, webSearch, context, params)
+        let (llm, webSearch, searchGate, contextProvider, params) = (llm, webSearch, searchGate, context, params)
         return AsyncThrowingStream { continuation in
             let task = Task {
                 do {
@@ -64,10 +73,14 @@ public struct QAEngine: Sendable {
                     // A configured search tool wins over the provider's hosted search, so the choice in
                     // Settings holds whichever model answers.
                     if let webSearch {
-                        continuation.yield(.activity("Searching the web…"))
-                        let results = try await webSearch.search(question, maxResults: 5)
-                        continuation.yield(.sources(results.map { WebSource(title: $0.title, url: $0.url) }))
-                        prompt += "\n\n" + Prompts.webResults(results)
+                        // A failed gate call shouldn't cost the user an answer, so it falls back to searching.
+                        let search = await (try? searchGate?.shouldSearch(question: question, transcript: transcript)) ?? true
+                        if search {
+                            continuation.yield(.activity("Searching the web…"))
+                            let results = try await webSearch.search(question, maxResults: 5)
+                            continuation.yield(.sources(results.map { WebSource(title: $0.title, url: $0.url) }))
+                            prompt += "\n\n" + Prompts.webResults(results)
+                        }
                     } else if llm.capabilities.serverWebSearch {
                         tools = [.webSearch(maxUses: 3)]
                     }

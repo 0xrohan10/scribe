@@ -20,6 +20,11 @@ struct SettingsView: View {
                 ProviderSection(
                     title: "Web search (Q&A)", registry: Providers.webSearch,
                     selection: $model.settings.webSearchProviderID, allowsNone: true, model: model)
+                if model.settings.webSearchProviderID != nil {
+                    ProviderSection(
+                        title: "Only search when needed", registry: Providers.searchGate,
+                        selection: $model.settings.searchGateProviderID, allowsNone: true, model: model)
+                }
             }
             .formStyle(.grouped)
             .tabItem { Label("Providers", systemImage: "cpu") }
