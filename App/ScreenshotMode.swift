@@ -35,7 +35,7 @@ enum ScreenshotMode {
         do {
             try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
             let db = database
-            let window = CGSize(width: 1240, height: 780)
+            let window = CGSize(width: 1280, height: 800)
 
             let live = try await liveMeeting(db)
             let finished = try await finishedMeeting(db, withSummary: true)
@@ -45,17 +45,16 @@ enum ScreenshotMode {
             try await organize(db, live: live.id, vendorCalls: [finished.id, review.id])
             await model.library.reload()
 
-            try await snapshot(MeetingWindow(vm: live, app: model), size: window, to: dir.appending(path: "1-live-meeting.png"))
-            try await snapshot(MeetingWindow(vm: finished, app: model), size: window, to: dir.appending(path: "2-summary.png"))
-            try await snapshot(MeetingWindow(vm: review, app: model), size: window, to: dir.appending(path: "3-note-highlight.png"))
-            try await snapshot(SettingsView(model: model), size: CGSize(width: 560, height: 520), to: dir.appending(path: "4-settings.png"))
-            // The split view's translucent sidebar doesn't render offscreen, so compose the same two views.
-            let library = HStack(spacing: 0) {
-                LibrarySidebar(library: model.library).frame(width: 220)
-                Divider()
-                LibraryMeetingList(library: model.library, app: model)
+            let shots: [(String, MeetingViewModel?, Route)] = [
+                ("1-live-meeting", live, .meeting), ("2-summary", finished, .meeting), ("3-note-highlight", review, .meeting),
+                ("4-settings", nil, .settings), ("5-library", nil, .library),
+            ]
+            for (name, vm, route) in shots {
+                model.display(vm, route: route)
+                for (suffix, appearance) in [("", NSAppearance.Name.aqua), ("-dark", .darkAqua)] {
+                    try await snapshot(MainView(app: model), size: window, appearance: appearance, to: dir.appending(path: "\(name)\(suffix).png"))
+                }
             }
-            try await snapshot(library, size: CGSize(width: 980, height: 620), to: dir.appending(path: "5-library.png"))
             print("Saved screenshots to \(dir.path)")
             exit(0)
         } catch {
@@ -154,21 +153,27 @@ enum ScreenshotMode {
 
     // MARK: Rendering
 
-    private static func snapshot(_ view: some View, size: CGSize, to url: URL) async throws {
-        let hosting = NSHostingView(rootView: view.background(Color(nsColor: .windowBackgroundColor)))
+    private static func snapshot(_ view: some View, size: CGSize, appearance: NSAppearance.Name, to url: URL) async throws {
+        let hosting = NSHostingView(rootView: view)
         hosting.frame = CGRect(origin: .zero, size: size)
-        let window = NSWindow(contentRect: hosting.frame, styleMask: [.titled], backing: .buffered, defer: false)
+        // The same chrome as the main window, so the title bar buttons are in the picture.
+        let window = NSWindow(
+            contentRect: hosting.frame, styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView],
+            backing: .buffered, defer: false)
         window.isReleasedWhenClosed = false
+        window.titleVisibility = .hidden
+        window.titlebarAppearsTransparent = true
         // One fixed appearance; offscreen rendering otherwise mixes light text into dark controls.
-        window.appearance = NSAppearance(named: .aqua)
+        window.appearance = NSAppearance(named: appearance)
         window.contentView = hosting
         window.setFrameOrigin(NSPoint(x: -20_000, y: -20_000))
-        window.orderFrontRegardless()
+        window.makeKeyAndOrderFront(nil)
         // Let event streams, async loads and layout settle.
         try await Task.sleep(for: .milliseconds(800))
-        hosting.layoutSubtreeIfNeeded()
-        guard let rep = hosting.bitmapImageRepForCachingDisplay(in: hosting.bounds) else { throw CocoaError(.fileWriteUnknown) }
-        hosting.cacheDisplay(in: hosting.bounds, to: rep)
+        guard let frame = hosting.superview else { throw CocoaError(.fileWriteUnknown) }
+        frame.layoutSubtreeIfNeeded()
+        guard let rep = frame.bitmapImageRepForCachingDisplay(in: frame.bounds) else { throw CocoaError(.fileWriteUnknown) }
+        frame.cacheDisplay(in: frame.bounds, to: rep)
         try rep.representation(using: .png, properties: [:])?.write(to: url)
         window.close()
     }

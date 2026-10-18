@@ -7,7 +7,7 @@ macOS 14.2+ (Core Audio process taps). On-device transcription with `SpeechAnaly
 ## Layout
 
 ```
-App/                      thin app target: composition root (AppModel), MenuBarExtra, windows, views
+App/                      thin app target: composition root (AppModel), MenuBarExtra, the main window, views
   Providers.swift         provider registry: one line per transcription/LLM adapter
 Packages/ScribeKit/       one SwiftPM target per domain; domains import only Core
   Core/                   models, provider + repository protocols, SessionClock, Broadcaster
@@ -19,8 +19,9 @@ Packages/ScribeKit/       one SwiftPM target per domain; domains import only Cor
   Session/                MeetingSession: lifecycle state machine, per-source transcription, persistence fan-out
   Persistence/            GRDB database + repositories, DiskAudioFileStore
   Settings/               AppSettings (UserDefaults), KeychainSecretStore
+  Fixtures/               fake audio and an echo LLM for the `scribe` CLI and the app's --ui-testing mode
   Tools/TapCheck/         `scribe-tapcheck` CLI for testing process taps
-  Tools/ScribeCLI/        `scribe` dev-debugging CLI: fake meetings, database dumps, search-gate scores
+  Tools/ScribeCLI/        `scribe` dev-debugging CLI: fake meetings, database dumps, search-gate scores, UI driving
 project.yml               XcodeGen spec for Scribe.xcodeproj
 ```
 
@@ -49,6 +50,14 @@ For debugging without the app, `scribe` runs a meeting through the real session,
 ```bash
 cd Packages/ScribeKit && swift run scribe demo --seconds 12 --note "5:! billing is the main risk" --ask "7:what did they just say?"
 ```
+
+`scribe ui` drives the real app through the Accessibility API. It launches the Debug build with `--ui-testing`, which swaps in fake audio, the fake transcriber and the echo LLM and keeps its data in a temporary folder. `scribe ui demo` records, takes notes, asks, stops, summarizes and files a meeting, checking each step and the saved database, and exits non-zero on the first failure. Your terminal needs Accessibility access. Build the Debug app first.
+
+```bash
+cd Packages/ScribeKit && swift run scribe ui demo
+```
+
+The smaller commands (`launch`, `menu`, `press`, `type`, `wait`, `read`, `tree`, `screenshot`, `quit`) can be chained for other flows. Queries match accessibility identifiers such as `notes.add`, titles or labels; `scribe ui tree` lists them.
 
 Debug builds are signed ad hoc. That means macOS may ask again for permissions and Keychain access after rebuilds.
 

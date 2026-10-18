@@ -3,7 +3,6 @@ import SwiftUI
 
 struct MenuBarContent: View {
     let model: AppModel
-    @Environment(\.openWindow) private var openWindow
 
     var body: some View {
         if let current = model.current, current.isRecording {
@@ -29,11 +28,8 @@ struct MenuBarContent: View {
         }
 
         Divider()
-        Button("Library…") {
-            NSApp.activate()
-            openWindow(id: "library")
-        }
-        .keyboardShortcut("l")
+        Button("Open Scribe") { model.showLibrary() }
+            .keyboardShortcut("o")
         Menu("Recent Meetings") {
             if model.recentMeetings.isEmpty { Text("None yet") }
             ForEach(model.recentMeetings) { meeting in
@@ -43,7 +39,7 @@ struct MenuBarContent: View {
         if !Accessibility.isTrusted {
             Button("Enable Teams & Meet Detection…") { Accessibility.requestTrust() }
         }
-        SettingsLink { Text("Settings…") }
+        Button("Settings…") { model.showSettings() }
             .keyboardShortcut(",")
         Divider()
         Button("Quit Scribe") { NSApp.terminate(nil) }

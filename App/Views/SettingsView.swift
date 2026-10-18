@@ -9,7 +9,11 @@ struct SettingsView: View {
     @Bindable var model: AppModel
 
     var body: some View {
-        TabView {
+        VStack(alignment: .leading, spacing: 0) {
+            Text("Settings")
+                .font(Theme.serif(30))
+                .padding(.horizontal, 20)
+                .padding(.bottom, 4)
             Form {
                 ProviderSection(
                     title: "Transcription", registry: Providers.transcription,
@@ -25,11 +29,6 @@ struct SettingsView: View {
                         title: "Only search when needed", registry: Providers.searchGate,
                         selection: $model.settings.searchGateProviderID, allowsNone: true, model: model)
                 }
-            }
-            .formStyle(.grouped)
-            .tabItem { Label("Providers", systemImage: "cpu") }
-
-            Form {
                 Section("Recording") {
                     Picker("System audio", selection: $model.settings.systemAudioMode) {
                         Text("All apps").tag(SystemAudioMode.allApps)
@@ -44,10 +43,11 @@ struct SettingsView: View {
                 PermissionsSection()
             }
             .formStyle(.grouped)
-            .tabItem { Label("General", systemImage: "gearshape") }
+            .scrollContentBackground(.hidden)
         }
-        .frame(width: 560, height: 520)
-        .onAppear { NSApp.activate() }
+        .frame(maxWidth: 720)
+        .padding(.top, 40)
+        .frame(maxWidth: .infinity)
     }
 }
 

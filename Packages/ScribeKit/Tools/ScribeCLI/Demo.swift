@@ -1,6 +1,7 @@
 import ArgumentParser
 import Core
 import Foundation
+import Fixtures
 import Intelligence
 import Notes
 import Persistence

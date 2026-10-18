@@ -16,20 +16,28 @@ struct TranscriptView: View {
         let highlighted = anchored
         ScrollViewReader { proxy in
             ScrollView {
-                LazyVStack(alignment: .leading, spacing: 10) {
+                LazyVStack(alignment: .leading, spacing: 14) {
                     if vm.transcript.isEmpty {
                         Text(vm.isRecording ? "Listening…" : "No transcript.")
-                            .foregroundStyle(.secondary)
-                            .padding(.top, 40)
+                            .font(.system(size: 15))
+                            .foregroundStyle(Theme.secondary)
+                            .padding(.top, 60)
                             .frame(maxWidth: .infinity)
+                            .transition(.opacity)
                     }
                     ForEach(vm.transcript.segments) { segment in
-                        SegmentRow(segment: segment, isAnchored: highlighted.contains(segment.id)).id(segment.id)
+                        SegmentRow(segment: segment, isAnchored: highlighted.contains(segment.id)).id(segment.id).transition(.rise)
                     }
                     Color.clear.frame(height: 1).id("bottom")
                 }
-                .padding(16)
+                .frame(maxWidth: 720)
+                .padding(.horizontal, 28)
+                .padding(.vertical, 20)
+                .frame(maxWidth: .infinity)
+                .motion(Motion.quick, value: vm.transcript.segments.map(\.id))
+                .motion(value: highlighted)
             }
+            .accessibilityIdentifier("transcript")
             .onChange(of: vm.transcript.segments.last?.text) {
                 if followLive, vm.isRecording { proxy.scrollTo("bottom", anchor: .bottom) }
             }
@@ -47,33 +55,42 @@ struct TranscriptView: View {
                         vm.focusedNote = nil
                         proxy.scrollTo("bottom", anchor: .bottom)
                     }
+                    .buttonStyle(QuietButtonStyle())
                     .padding(12)
+                    .transition(.rise)
                 }
             }
         }
     }
 }
 
+/// Like a chat: what I said sits in a bubble on the right, everyone else reads as plain text.
 private struct SegmentRow: View {
     let segment: TranscriptSegment
     var isAnchored = false
 
+    private var isMe: Bool { segment.speaker == .me }
+
     var body: some View {
-        HStack(alignment: .firstTextBaseline, spacing: 10) {
-            Text(segment.start.clockString)
-                .font(.caption.monospacedDigit())
-                .foregroundStyle(.tertiary)
-                .frame(width: 44, alignment: .trailing)
-            Text(segment.speaker == .me ? "Me" : "Them")
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(segment.speaker == .me ? Color.accentColor : .orange)
-                .frame(width: 38, alignment: .leading)
+        VStack(alignment: isMe ? .trailing : .leading, spacing: 4) {
+            Text("\(isMe ? "Me" : "Them") · \(segment.start.clockString)")
+                .font(.system(size: 11).monospacedDigit())
+                .foregroundStyle(Theme.tertiary)
             Text(segment.text)
-                .foregroundStyle(segment.isFinal ? .primary : .secondary)
+                .font(.system(size: 15))
+                .lineSpacing(4)
+                .foregroundStyle(segment.isFinal ? Theme.text : Theme.secondary)
                 .textSelection(.enabled)
-                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, isMe ? 14 : 0)
+                .padding(.vertical, isMe ? 9 : 0)
+                .background(isMe ? Theme.bubble : .clear, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                .frame(maxWidth: isMe ? 520 : .infinity, alignment: isMe ? .trailing : .leading)
         }
-        .padding(.vertical, isAnchored ? 4 : 0)
-        .background(isAnchored ? Color.yellow.opacity(0.15) : .clear, in: RoundedRectangle(cornerRadius: 6))
+        .frame(maxWidth: .infinity, alignment: isMe ? .trailing : .leading)
+        .padding(isAnchored ? 8 : 0)
+        .background(isAnchored ? Theme.highlight.opacity(0.08) : .clear, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .motion(Motion.quick, value: segment.text)
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier(segment.isFinal ? "transcript.segment" : "transcript.partial")
     }
 }

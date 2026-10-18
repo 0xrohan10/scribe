@@ -3,20 +3,20 @@ import Foundation
 
 /// Real-time silence: a 0.5 s chunk every 0.5 s from `from` until `until` on the session clock, then holds
 /// the stream open until `stop()`, like a live source would.
-actor SilentSource: AudioSource {
-    nonisolated let source: AudioChunk.Source
+public actor SilentSource: AudioSource {
+    public nonisolated let source: AudioChunk.Source
     let from: TimeInterval
     let until: TimeInterval
     private var continuation: AsyncStream<AudioChunk>.Continuation?
     private var feeder: Task<Void, Never>?
 
-    init(_ source: AudioChunk.Source, from: TimeInterval, until: TimeInterval) {
+    public init(_ source: AudioChunk.Source, from: TimeInterval = 0, until: TimeInterval = .infinity) {
         self.source = source
         self.from = from
         self.until = until
     }
 
-    func start(clock: SessionClock, recordingTo url: URL?) -> AsyncStream<AudioChunk> {
+    public func start(clock: SessionClock, recordingTo url: URL?) -> AsyncStream<AudioChunk> {
         let (stream, continuation) = AsyncStream.makeStream(of: AudioChunk.self)
         self.continuation = continuation
         let (source, from, until) = (source, from, until)
@@ -33,7 +33,7 @@ actor SilentSource: AudioSource {
         return stream
     }
 
-    func stop() {
+    public func stop() {
         feeder?.cancel()
         continuation?.finish()
     }
@@ -41,11 +41,13 @@ actor SilentSource: AudioSource {
 
 /// Answers by describing what it was sent, so you can see what reached the model.
 /// Summary requests get a JSON summary built from the prompt's transcript and notes.
-struct EchoLLM: LLMProvider {
-    let id = "echo"
-    let capabilities = LLMCapabilities()
+public struct EchoLLM: LLMProvider {
+    public let id = "echo"
+    public let capabilities = LLMCapabilities()
 
-    func complete(_ req: LLMRequest) -> AsyncThrowingStream<LLMDelta, Error> {
+    public init() {}
+
+    public func complete(_ req: LLMRequest) -> AsyncThrowingStream<LLMDelta, Error> {
         let text = (req.system ?? "").contains("Reply with only a JSON object") ? Self.summary(req) : Self.answer(req)
         return AsyncThrowingStream { continuation in
             continuation.yield(.text(text))

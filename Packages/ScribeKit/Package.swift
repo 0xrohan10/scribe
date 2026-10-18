@@ -6,7 +6,7 @@ let domains = ["Core", "Capture", "Detection", "Transcription", "Intelligence", 
 let package = Package(
     name: "ScribeKit",
     platforms: [.macOS("14.2")],
-    products: domains.map { .library(name: $0, targets: [$0]) },
+    products: (domains + ["Fixtures"]).map { .library(name: $0, targets: [$0]) },
     dependencies: [
         .package(url: "https://github.com/groue/GRDB.swift.git", from: "7.0.0"),
         .package(url: "https://github.com/apple/swift-argument-parser.git", from: "1.5.0"),
@@ -21,6 +21,8 @@ let package = Package(
         .target(name: "Session", dependencies: ["Core"]),
         .target(name: "Persistence", dependencies: ["Core", .product(name: "GRDB", package: "GRDB.swift")]),
         .target(name: "Settings", dependencies: ["Core"]),
+        // Fake audio and LLM for the `scribe` CLI and the app's UI-testing mode. No domain depends on it.
+        .target(name: "Fixtures", dependencies: ["Core"]),
 
         // Records N seconds of system audio through a process tap and reports levels.
         // `swift run scribe-tapcheck --bundle com.google.Chrome --seconds 10`
@@ -30,7 +32,7 @@ let package = Package(
         .executableTarget(
             name: "scribe",
             dependencies: [
-                "Core", "Intelligence", "Notes", "Persistence", "Session", "Settings", "Transcription",
+                "Core", "Fixtures", "Intelligence", "Notes", "Persistence", "Session", "Settings", "Transcription",
                 .product(name: "ArgumentParser", package: "swift-argument-parser"),
             ],
             path: "Tools/ScribeCLI"),

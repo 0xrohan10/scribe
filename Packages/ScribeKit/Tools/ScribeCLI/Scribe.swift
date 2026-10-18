@@ -5,7 +5,7 @@ import Foundation
 struct Scribe: AsyncParsableCommand {
     static let configuration = CommandConfiguration(
         abstract: "Dev debugging for Scribe. No microphone, system audio or network unless a command says so.",
-        subcommands: [Demo.self, DB.self, Gate.self])
+        subcommands: [Demo.self, DB.self, Gate.self, UI.self])
 
     static func main() async {
         // Line-buffer stdout so events show up as they happen when piped (e.g. through `tee`).

@@ -75,6 +75,9 @@ targets:
         product: Persistence
       - package: ScribeKit
         product: Settings
+      # Fakes for the DEBUG-only --ui-testing mode.
+      - package: ScribeKit
+        product: Fixtures
 
 schemes:
   Scribe:

@@ -8,24 +8,28 @@
 
 /* Begin PBXBuildFile section */
 		03E3AD8C32319624C23126FF /* LibraryModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = EEB567B7E682A1AE935CB4C1 /* LibraryModel.swift */; };
+		03F17A7DDB1B76E764F62D9D /* LibraryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 16FC2007B40E7D806CDEAA5C /* LibraryView.swift */; };
 		07738FBE1CECDEFA3B4E68F3 /* MenuBarContent.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6F8930B1AC1567B6AEC0D082 /* MenuBarContent.swift */; };
 		0D2DBF580CCEEAC20329C656 /* NotesPane.swift in Sources */ = {isa = PBXBuildFile; fileRef = D032A92E1A776B63CF579C52 /* NotesPane.swift */; };
 		1F5F5361260BE8D4BBB2DA0F /* MeetingViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 70FAC61B33B651C04DD30C49 /* MeetingViewModel.swift */; };
 		24A6A5A5B04E4F058283FDD4 /* Providers.swift in Sources */ = {isa = PBXBuildFile; fileRef = D8A4185F90A9B7DA90FBE803 /* Providers.swift */; };
 		2ABDD6AF527B3BBB7D09ADE1 /* TranscriptView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 31DB739FFBD266E116F4A6DF /* TranscriptView.swift */; };
+		2B8B7E4E2D69AB4D84125C9D /* UITestingMode.swift in Sources */ = {isa = PBXBuildFile; fileRef = 07360CB95B72EAEE2AC97737 /* UITestingMode.swift */; };
 		45327FC491943C693F6912E3 /* Intelligence in Frameworks */ = {isa = PBXBuildFile; productRef = D8E4CF93679FA31824F5B4B8 /* Intelligence */; };
+		472FCDA623E0BA02F605FF3E /* MeetingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = EF4604FC50901596CDCD2296 /* MeetingView.swift */; };
 		57673A0F4A94845D463F0BB0 /* AskPane.swift in Sources */ = {isa = PBXBuildFile; fileRef = 448E4B004B86B087932ED640 /* AskPane.swift */; };
+		62831DC18B270DA609C05473 /* Fixtures in Frameworks */ = {isa = PBXBuildFile; productRef = B59C629116E0BC0443A80A36 /* Fixtures */; };
 		7EEE414584CE68A16B090687 /* AppModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = C94E99AA2B846206980C64F7 /* AppModel.swift */; };
 		85191DE569E6773587D5EB9F /* ScreenshotMode.swift in Sources */ = {isa = PBXBuildFile; fileRef = 55B68F01E41FBC6C6D258F68 /* ScreenshotMode.swift */; };
-		86D23C4181BE430ADC29F3F6 /* LibraryWindow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 141EDE066AC8EFADEBAA36BA /* LibraryWindow.swift */; };
+		9F242ADC5DD0879538560697 /* Theme.swift in Sources */ = {isa = PBXBuildFile; fileRef = C1459A7B497B899847A77293 /* Theme.swift */; };
 		A1D740A1FA748F2727660A1A /* Transcription in Frameworks */ = {isa = PBXBuildFile; productRef = 32B52F283C8DAB662CF4AA43 /* Transcription */; };
 		A89AFEB23C64F67DDE841DDB /* Persistence in Frameworks */ = {isa = PBXBuildFile; productRef = 861320D543AACB6A9A0318E8 /* Persistence */; };
 		ABA1AC2311F52903EE98729A /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F3580E66CDA7CD267E461398 /* SettingsView.swift */; };
+		AF61B05911A84742D2158D3C /* MainView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 34BD422B69D155382E593EE6 /* MainView.swift */; };
 		B223389DD6B7D6F3AF1292C6 /* Core in Frameworks */ = {isa = PBXBuildFile; productRef = 6FD4B83F31EF37A646B4A9A7 /* Core */; };
 		B6DB344BD5F3A072041EAD28 /* Settings in Frameworks */ = {isa = PBXBuildFile; productRef = B04960C478E318A233ED270D /* Settings */; };
 		BD522C00E5314D9DD3A372F6 /* Session in Frameworks */ = {isa = PBXBuildFile; productRef = B7BB7E8B224E42F0D407E6F5 /* Session */; };
 		C62E9FFCD26FEFDBE715487D /* SummaryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0DCB762DB579E32437716DE1 /* SummaryView.swift */; };
-		D7DADF271B65843472A532F0 /* MeetingWindow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3F0D6E6C7B6B0F984774CABC /* MeetingWindow.swift */; };
 		E8CCA56FC696EAA1FAE806B5 /* ScribeApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 880B91E8CAA267C8B8C2B36A /* ScribeApp.swift */; };
 		EAE5D4E4120F7F855B7ADB6D /* Capture in Frameworks */ = {isa = PBXBuildFile; productRef = 0E8D3D79BFDC42151F4B2035 /* Capture */; };
 		EB0FA60A0BD3F50F9FACC252 /* Detection in Frameworks */ = {isa = PBXBuildFile; productRef = 194D03A41371641E7028E3F0 /* Detection */; };
@@ -34,11 +38,12 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		07360CB95B72EAEE2AC97737 /* UITestingMode.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UITestingMode.swift; sourceTree = "<group>"; };
 		0DCB762DB579E32437716DE1 /* SummaryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SummaryView.swift; sourceTree = "<group>"; };
 		11345C81116DC36BA7419B25 /* Scribe.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Scribe.app; sourceTree = BUILT_PRODUCTS_DIR; };
-		141EDE066AC8EFADEBAA36BA /* LibraryWindow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LibraryWindow.swift; sourceTree = "<group>"; };
+		16FC2007B40E7D806CDEAA5C /* LibraryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LibraryView.swift; sourceTree = "<group>"; };
 		31DB739FFBD266E116F4A6DF /* TranscriptView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TranscriptView.swift; sourceTree = "<group>"; };
-		3F0D6E6C7B6B0F984774CABC /* MeetingWindow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MeetingWindow.swift; sourceTree = "<group>"; };
+		34BD422B69D155382E593EE6 /* MainView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainView.swift; sourceTree = "<group>"; };
 		448E4B004B86B087932ED640 /* AskPane.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AskPane.swift; sourceTree = "<group>"; };
 		50EB6AAADE2F4C1F7A4D78BC /* MeetingPrompter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MeetingPrompter.swift; sourceTree = "<group>"; };
 		55B68F01E41FBC6C6D258F68 /* ScreenshotMode.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScreenshotMode.swift; sourceTree = "<group>"; };
@@ -48,11 +53,13 @@
 		7E2E63FAF04FEF1780599325 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		880B91E8CAA267C8B8C2B36A /* ScribeApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScribeApp.swift; sourceTree = "<group>"; };
 		937CFA70D9C6F217F5E4C37A /* ScribeKit */ = {isa = PBXFileReference; lastKnownFileType = folder; name = ScribeKit; path = Packages/ScribeKit; sourceTree = SOURCE_ROOT; };
+		C1459A7B497B899847A77293 /* Theme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Theme.swift; sourceTree = "<group>"; };
 		C2DBA317340F79FE570C9C7A /* Scribe.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Scribe.entitlements; sourceTree = "<group>"; };
 		C94E99AA2B846206980C64F7 /* AppModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppModel.swift; sourceTree = "<group>"; };
 		D032A92E1A776B63CF579C52 /* NotesPane.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotesPane.swift; sourceTree = "<group>"; };
 		D8A4185F90A9B7DA90FBE803 /* Providers.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Providers.swift; sourceTree = "<group>"; };
 		EEB567B7E682A1AE935CB4C1 /* LibraryModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LibraryModel.swift; sourceTree = "<group>"; };
+		EF4604FC50901596CDCD2296 /* MeetingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MeetingView.swift; sourceTree = "<group>"; };
 		F3580E66CDA7CD267E461398 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -70,6 +77,7 @@
 				BD522C00E5314D9DD3A372F6 /* Session in Frameworks */,
 				A89AFEB23C64F67DDE841DDB /* Persistence in Frameworks */,
 				B6DB344BD5F3A072041EAD28 /* Settings in Frameworks */,
+				62831DC18B270DA609C05473 /* Fixtures in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -96,6 +104,7 @@
 				55B68F01E41FBC6C6D258F68 /* ScreenshotMode.swift */,
 				C2DBA317340F79FE570C9C7A /* Scribe.entitlements */,
 				880B91E8CAA267C8B8C2B36A /* ScribeApp.swift */,
+				07360CB95B72EAEE2AC97737 /* UITestingMode.swift */,
 				AB0F93597E220BD30E8DD701 /* Views */,
 			);
 			path = App;
@@ -121,12 +130,14 @@
 			isa = PBXGroup;
 			children = (
 				448E4B004B86B087932ED640 /* AskPane.swift */,
-				141EDE066AC8EFADEBAA36BA /* LibraryWindow.swift */,
-				3F0D6E6C7B6B0F984774CABC /* MeetingWindow.swift */,
+				16FC2007B40E7D806CDEAA5C /* LibraryView.swift */,
+				34BD422B69D155382E593EE6 /* MainView.swift */,
+				EF4604FC50901596CDCD2296 /* MeetingView.swift */,
 				6F8930B1AC1567B6AEC0D082 /* MenuBarContent.swift */,
 				D032A92E1A776B63CF579C52 /* NotesPane.swift */,
 				F3580E66CDA7CD267E461398 /* SettingsView.swift */,
 				0DCB762DB579E32437716DE1 /* SummaryView.swift */,
+				C1459A7B497B899847A77293 /* Theme.swift */,
 				31DB739FFBD266E116F4A6DF /* TranscriptView.swift */,
 			);
 			path = Views;
@@ -167,6 +178,7 @@
 				B7BB7E8B224E42F0D407E6F5 /* Session */,
 				861320D543AACB6A9A0318E8 /* Persistence */,
 				B04960C478E318A233ED270D /* Settings */,
+				B59C629116E0BC0443A80A36 /* Fixtures */,
 			);
 			productName = Scribe;
 			productReference = 11345C81116DC36BA7419B25 /* Scribe.app */;
@@ -216,10 +228,11 @@
 				7EEE414584CE68A16B090687 /* AppModel.swift in Sources */,
 				57673A0F4A94845D463F0BB0 /* AskPane.swift in Sources */,
 				03E3AD8C32319624C23126FF /* LibraryModel.swift in Sources */,
-				86D23C4181BE430ADC29F3F6 /* LibraryWindow.swift in Sources */,
+				03F17A7DDB1B76E764F62D9D /* LibraryView.swift in Sources */,
+				AF61B05911A84742D2158D3C /* MainView.swift in Sources */,
 				F94C7D486F3E7A25D018978B /* MeetingPrompter.swift in Sources */,
+				472FCDA623E0BA02F605FF3E /* MeetingView.swift in Sources */,
 				1F5F5361260BE8D4BBB2DA0F /* MeetingViewModel.swift in Sources */,
-				D7DADF271B65843472A532F0 /* MeetingWindow.swift in Sources */,
 				07738FBE1CECDEFA3B4E68F3 /* MenuBarContent.swift in Sources */,
 				0D2DBF580CCEEAC20329C656 /* NotesPane.swift in Sources */,
 				24A6A5A5B04E4F058283FDD4 /* Providers.swift in Sources */,
@@ -227,7 +240,9 @@
 				E8CCA56FC696EAA1FAE806B5 /* ScribeApp.swift in Sources */,
 				ABA1AC2311F52903EE98729A /* SettingsView.swift in Sources */,
 				C62E9FFCD26FEFDBE715487D /* SummaryView.swift in Sources */,
+				9F242ADC5DD0879538560697 /* Theme.swift in Sources */,
 				2ABDD6AF527B3BBB7D09ADE1 /* TranscriptView.swift in Sources */,
+				2B8B7E4E2D69AB4D84125C9D /* UITestingMode.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -460,6 +475,10 @@
 		B04960C478E318A233ED270D /* Settings */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = Settings;
+		};
+		B59C629116E0BC0443A80A36 /* Fixtures */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = Fixtures;
 		};
 		B7BB7E8B224E42F0D407E6F5 /* Session */ = {
 			isa = XCSwiftPackageProductDependency;
