@@ -20,6 +20,7 @@ Packages/ScribeKit/       one SwiftPM target per domain; domains import only Cor
   Persistence/            GRDB database + repositories, DiskAudioFileStore
   Settings/               AppSettings (UserDefaults), KeychainSecretStore
   Tools/TapCheck/         `scribe-tapcheck` CLI for testing process taps
+  Tools/ScribeCLI/        `scribe` dev-debugging CLI: fake meetings, database dumps, search-gate scores
 project.yml               XcodeGen spec for Scribe.xcodeproj
 ```
 
@@ -42,6 +43,12 @@ cd Packages/ScribeKit && swift test
 Run `swift test --sanitize=thread` after touching capture or session code. `CaptureSinkTests` only catches races on the recording file under the thread sanitizer.
 
 Debug builds can render the main screens with demo data, without permissions or API keys. Run the built app binary with `--screenshots <dir>`, for example `build/DerivedData/Build/Products/Debug/Scribe.app/Contents/MacOS/Scribe --screenshots build/screenshots`.
+
+For debugging without the app, `scribe` runs a meeting through the real session, notes, Q&A and summary code with fake audio, transcription and LLM (`demo`), dumps a database (`db`), and scores questions with the Jev search gate (`gate`, which calls the API). See `swift run scribe help <subcommand>`.
+
+```bash
+cd Packages/ScribeKit && swift run scribe demo --seconds 12 --note "5:! billing is the main risk" --ask "7:what did they just say?"
+```
 
 Debug builds are signed ad hoc. That means macOS may ask again for permissions and Keychain access after rebuilds.
 

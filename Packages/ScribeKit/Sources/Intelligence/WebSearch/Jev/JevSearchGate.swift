@@ -22,9 +22,14 @@ public struct JevSearchGate: SearchGate {
     }
 
     public func shouldSearch(question: String, transcript: Transcript) async throws -> Bool {
+        try await probability(question: question, transcript: transcript) >= threshold
+    }
+
+    /// P(needs web), before the threshold is applied.
+    public func probability(question: String, transcript: Transcript) async throws -> Double {
         let request = try await urlRequest(question: question, transcript: transcript)
         let (data, response) = try await session.data(for: request)
-        return try Self.decodeProbability(data, status: (response as? HTTPURLResponse)?.statusCode ?? 0) >= threshold
+        return try Self.decodeProbability(data, status: (response as? HTTPURLResponse)?.statusCode ?? 0)
     }
 
     func urlRequest(question: String, transcript: Transcript) async throws -> URLRequest {

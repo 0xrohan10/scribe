@@ -9,6 +9,7 @@ let package = Package(
     products: domains.map { .library(name: $0, targets: [$0]) },
     dependencies: [
         .package(url: "https://github.com/groue/GRDB.swift.git", from: "7.0.0"),
+        .package(url: "https://github.com/apple/swift-argument-parser.git", from: "1.5.0"),
     ],
     targets: [
         .target(name: "Core"),
@@ -24,6 +25,15 @@ let package = Package(
         // Records N seconds of system audio through a process tap and reports levels.
         // `swift run scribe-tapcheck --bundle com.google.Chrome --seconds 10`
         .executableTarget(name: "scribe-tapcheck", dependencies: ["Core", "Capture"], path: "Tools/TapCheck"),
+        // Dev debugging: runs meetings with fake audio, transcription and LLM, dumps databases, probes the search gate.
+        // `swift run scribe demo --seconds 12 --note "5:! billing is the risk" --ask "what did they just say?"`
+        .executableTarget(
+            name: "scribe",
+            dependencies: [
+                "Core", "Intelligence", "Notes", "Persistence", "Session", "Settings", "Transcription",
+                .product(name: "ArgumentParser", package: "swift-argument-parser"),
+            ],
+            path: "Tools/ScribeCLI"),
 
         .testTarget(name: "CoreTests", dependencies: ["Core"]),
         .testTarget(name: "CaptureTests", dependencies: ["Core", "Capture"]),
