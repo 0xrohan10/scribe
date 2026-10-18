@@ -1,0 +1,3 @@
+// Your Apple Developer Team ID, needed for Release (Developer ID) builds.
+// Debug builds are signed ad hoc and run without it.
+DEVELOPMENT_TEAM =

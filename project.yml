@@ -1,0 +1,87 @@
+# Source of truth for Scribe.xcodeproj. After editing: `xcodegen generate`.
+name: Scribe
+options:
+  bundleIdPrefix: ai.rohan
+  deploymentTarget:
+    macOS: "14.2"
+  createIntermediateGroups: true
+
+configFiles:
+  Debug: Config/Signing.xcconfig
+  Release: Config/Signing.xcconfig
+
+packages:
+  ScribeKit:
+    path: Packages/ScribeKit
+
+settings:
+  base:
+    SWIFT_VERSION: "6.0"
+    SWIFT_STRICT_CONCURRENCY: complete
+    MACOSX_DEPLOYMENT_TARGET: "14.2"
+    ENABLE_HARDENED_RUNTIME: YES
+    DEAD_CODE_STRIPPING: YES
+
+targets:
+  Scribe:
+    type: application
+    platform: macOS
+    sources:
+      - App
+    info:
+      path: App/Info.plist
+      properties:
+        CFBundleDisplayName: Scribe
+        CFBundleShortVersionString: "0.1.0"
+        CFBundleVersion: "1"
+        LSUIElement: true
+        LSApplicationCategoryType: public.app-category.productivity
+        NSMicrophoneUsageDescription: Scribe records your microphone to transcribe what you say in meetings.
+        NSAudioCaptureUsageDescription: Scribe records the meeting app's audio to transcribe what other people say.
+    entitlements:
+      path: App/Scribe.entitlements
+      properties:
+        com.apple.security.device.audio-input: true
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: ai.rohan.Scribe
+        PRODUCT_NAME: Scribe
+        GENERATE_INFOPLIST_FILE: NO
+        COMBINE_HIDPI_IMAGES: YES
+      configs:
+        Debug:
+          CODE_SIGN_STYLE: Automatic
+          CODE_SIGN_IDENTITY: "-"
+        Release:
+          CODE_SIGN_STYLE: Manual
+          CODE_SIGN_IDENTITY: Developer ID Application
+          OTHER_CODE_SIGN_FLAGS: --timestamp
+    dependencies:
+      - package: ScribeKit
+        product: Core
+      - package: ScribeKit
+        product: Capture
+      - package: ScribeKit
+        product: Detection
+      - package: ScribeKit
+        product: Transcription
+      - package: ScribeKit
+        product: Intelligence
+      - package: ScribeKit
+        product: Notes
+      - package: ScribeKit
+        product: Session
+      - package: ScribeKit
+        product: Persistence
+      - package: ScribeKit
+        product: Settings
+
+schemes:
+  Scribe:
+    build:
+      targets:
+        Scribe: all
+    run:
+      config: Debug
+    archive:
+      config: Release
