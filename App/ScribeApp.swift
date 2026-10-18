@@ -32,15 +32,23 @@ struct ScribeApp: App {
 
 /// The one main window: sidebar plus library, meeting or settings. AppKit-managed so it can be opened from a
 /// notification action, where SwiftUI's `openWindow` isn't reachable.
+///
+/// Scribe lives in the menu bar, but while this window is open it's a regular app with a Dock icon and a place
+/// in ⌘-Tab.
 @MainActor
-final class MainWindowController {
+final class MainWindowController: NSObject, NSWindowDelegate {
     private var window: NSWindow?
 
     func show(app: AppModel) {
         let window = window ?? makeWindow(app: app)
         self.window = window
+        NSApp.setActivationPolicy(.regular)
         NSApp.activate()
         window.makeKeyAndOrderFront(nil)
+    }
+
+    func windowWillClose(_ notification: Notification) {
+        NSApp.setActivationPolicy(.accessory)
     }
 
     private func makeWindow(app: AppModel) -> NSWindow {
@@ -48,6 +56,7 @@ final class MainWindowController {
             contentRect: NSRect(x: 0, y: 0, width: 1280, height: 800),
             styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView], backing: .buffered, defer: false)
         window.isReleasedWhenClosed = false
+        window.delegate = self
         window.identifier = NSUserInterfaceItemIdentifier("main")
         window.title = "Scribe"
         window.titleVisibility = .hidden
