@@ -40,6 +40,21 @@ import Testing
         #expect(try await db.summaries.summary(meetingID: meeting.id) == nil)
     }
 
+    /// `MeetingSession` re-saves the meeting (end time, title, template) after segments exist. An
+    /// INSERT OR REPLACE save would delete the row and cascade away the transcript and notes.
+    @Test func resavingMeetingKeepsChildren() async throws {
+        var meeting = Meeting(title: "m")
+        try await db.meetings.save(meeting)
+        try await db.transcripts.upsert([TranscriptSegment(speaker: .me, text: "hi", start: 1, end: 2, isFinal: true)], meetingID: meeting.id)
+        try await db.notes.save(Note(meetingID: meeting.id, text: "n", timestamp: 3))
+        meeting.endedAt = Date(timeIntervalSince1970: 2_000)
+        try await db.meetings.save(meeting)
+
+        #expect(try await db.meetings.meeting(id: meeting.id)?.endedAt == Date(timeIntervalSince1970: 2_000))
+        #expect(try await db.transcripts.segments(meetingID: meeting.id).map(\.text) == ["hi"])
+        #expect(try await db.notes.notes(meetingID: meeting.id).map(\.text) == ["n"])
+    }
+
     @Test func summaryPayloadRoundTrips() async throws {
         let meeting = Meeting(title: "m")
         try await db.meetings.save(meeting)

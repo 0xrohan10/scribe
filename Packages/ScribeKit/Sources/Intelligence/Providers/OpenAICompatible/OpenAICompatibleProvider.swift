@@ -51,7 +51,8 @@ public struct OpenAICompatibleProvider: LLMProvider {
 
 enum OpenAIStreamDecoder {
     private struct Chunk: Decodable {
-        var choices: [Choice]
+        /// Absent on error chunks.
+        var choices: [Choice]?
         var error: APIError?
 
         struct Choice: Decodable {
@@ -72,7 +73,7 @@ enum OpenAIStreamDecoder {
         if data == "[DONE]" { return [] }
         let chunk = try ServerSentEvents.snakeCaseDecoder.decode(Chunk.self, from: Data(data.utf8))
         if let error = chunk.error { throw LLMError.api(error.message) }
-        guard let choice = chunk.choices.first else { return [] }
+        guard let choice = chunk.choices?.first else { return [] }
         var deltas: [LLMDelta] = []
         if let text = choice.delta?.content, !text.isEmpty { deltas.append(.text(text)) }
         if let reason = choice.finishReason { deltas.append(.done(stopReason: reason)) }

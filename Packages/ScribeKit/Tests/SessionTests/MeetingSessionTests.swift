@@ -31,6 +31,24 @@ private actor FakeAudioSource: AudioSource {
     func stop() { continuation?.finish() }
 }
 
+/// Its `start` doesn't return until `gate` finishes, like a process tap waiting on the TCC prompt.
+private actor SlowAudioSource: AudioSource {
+    nonisolated let source = AudioChunk.Source.mic
+    let gate: AsyncStream<Void>
+    private var continuation: AsyncStream<AudioChunk>.Continuation?
+
+    init(_ gate: AsyncStream<Void>) { self.gate = gate }
+
+    func start(clock: SessionClock, recordingTo url: URL?) async throws -> AsyncStream<AudioChunk> {
+        for await _ in gate {}
+        let (stream, continuation) = AsyncStream.makeStream(of: AudioChunk.self)
+        self.continuation = continuation
+        return stream
+    }
+
+    func stop() { continuation?.finish() }
+}
+
 private actor MemoryStore: MeetingRepository, TranscriptRepository, NoteRepository, SummaryRepository, AudioFileStore {
     var meetings: [UUID: Meeting] = [:]
     var segments: [UUID: TranscriptSegment] = [:]
@@ -106,6 +124,19 @@ private struct EchoSummarizer: MeetingSummarizer {
         for await case .warning(let w) in events { warnings.append(w) }
         #expect(warnings.count == 1)
         #expect(warnings.first?.hasPrefix("System audio") == true)
+        #expect(await session.state == .finished)
+    }
+
+    @Test func stopDuringStartStillStops() async throws {
+        let store = MemoryStore()
+        let gate = AsyncStream<Void>.makeStream()
+        let session = MeetingSession(meeting: Meeting(title: "T"), scope: .allApps, environment: environment(store, sources: [SlowAudioSource(gate.stream)]))
+        let starting = Task { try await session.start() }
+        while await session.state != .starting { await Task.yield() }
+
+        await session.stop()
+        gate.continuation.finish()
+        try await starting.value
         #expect(await session.state == .finished)
     }
 

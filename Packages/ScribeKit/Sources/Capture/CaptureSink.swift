@@ -20,8 +20,9 @@ public enum CaptureError: Error, LocalizedError {
 
 /// Normalizes captured buffers to 16 kHz mono Float32, writes them to an m4a and yields `AudioChunk`s.
 ///
-/// Called only from the capture thread (the engine tap or the IOProc queue), so its mutable state is
-/// confined there; that's what the `@unchecked Sendable` stands for.
+/// `consume` runs on the capture thread (the engine tap or the IOProc queue), which alone owns `converter`.
+/// `finish` runs on the owning actor and can overlap a last `consume`, so `file` is behind `fileLock`.
+/// That's what the `@unchecked Sendable` stands for.
 final class CaptureSink: @unchecked Sendable {
     static let sampleRate: Double = 16_000
     static let format = AVAudioFormat(commonFormat: .pcmFormatFloat32, sampleRate: sampleRate, channels: 1, interleaved: false)!
@@ -29,6 +30,7 @@ final class CaptureSink: @unchecked Sendable {
     private let source: AudioChunk.Source
     private let clock: SessionClock
     private let continuation: AsyncStream<AudioChunk>.Continuation
+    private let fileLock = NSLock()
     private var file: AVAudioFile?
     private var converter: AVAudioConverter?
 
@@ -49,14 +51,14 @@ final class CaptureSink: @unchecked Sendable {
 
     func consume(_ buffer: AVAudioPCMBuffer, hostTime: UInt64) {
         guard buffer.frameLength > 0, let out = normalize(buffer), out.frameLength > 0 else { return }
-        try? file?.write(from: out)
+        fileLock.withLock { try? file?.write(from: out) }
         let samples = Array(UnsafeBufferPointer(start: out.floatChannelData![0], count: Int(out.frameLength)))
         continuation.yield(AudioChunk(source: source, pcm: samples, sampleRate: Self.sampleRate, timestamp: clock.seconds(atHostTime: hostTime)))
     }
 
     func finish() {
         continuation.finish()
-        file = nil  // AVAudioFile finalizes the m4a on deinit.
+        fileLock.withLock { file = nil }  // AVAudioFile finalizes the m4a on deinit.
     }
 
     private func normalize(_ buffer: AVAudioPCMBuffer) -> AVAudioPCMBuffer? {

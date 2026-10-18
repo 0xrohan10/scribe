@@ -26,6 +26,7 @@ let package = Package(
         .executableTarget(name: "scribe-tapcheck", dependencies: ["Core", "Capture"], path: "Tools/TapCheck"),
 
         .testTarget(name: "CoreTests", dependencies: ["Core"]),
+        .testTarget(name: "CaptureTests", dependencies: ["Core", "Capture"]),
         .testTarget(name: "DetectionTests", dependencies: ["Core", "Detection"]),
         .testTarget(name: "TranscriptionTests", dependencies: ["Core", "Transcription"]),
         .testTarget(name: "IntelligenceTests", dependencies: ["Core", "Intelligence"]),

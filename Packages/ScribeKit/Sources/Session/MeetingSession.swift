@@ -82,6 +82,8 @@ public actor MeetingSession {
     private let broadcaster = Broadcaster<SessionEvent>()
     private var sources: [any AudioSource] = []
     private var pumps: [Task<Void, Never>] = []
+    /// `stop()` arrived while sources were still starting; `start()` stops once they're up.
+    private var stopRequested = false
 
     public init(meeting: Meeting, scope: SystemAudioScope, environment: SessionEnvironment, clock: SessionClock = SessionClock()) {
         self.meetingID = meeting.id
@@ -141,10 +143,12 @@ public actor MeetingSession {
             pumps.append(Task { await self.pump(segments) })
         }
         transition(to: .recording)
+        if stopRequested { await stop() }
     }
 
     /// Stops capture, waits for the last segments, then summarizes (if a summarizer is configured).
     public func stop() async {
+        if state == .starting { stopRequested = true }
         guard state == .recording else { return }
         transition(to: .stopping)
         for source in sources { await source.stop() }

@@ -30,9 +30,10 @@ import Testing
     }
 
     @Test func errorEventThrows() {
-        #expect(throws: LLMError.self) {
+        let error = #expect(throws: LLMError.self) {
             try AnthropicStreamDecoder.decode(#"{"type":"error","error":{"type":"overloaded_error","message":"Overloaded"}}"#)
         }
+        #expect(error?.localizedDescription == "Overloaded")
     }
 
     @Test func requestIncludesWebSearchTool() throws {
@@ -51,6 +52,14 @@ import Testing
         #expect(try OpenAIStreamDecoder.decode(#"{"choices":[{"delta":{"content":"Hi"},"finish_reason":null}]}"#) == [.text("Hi")])
         #expect(try OpenAIStreamDecoder.decode(#"{"choices":[{"delta":{},"finish_reason":"stop"}]}"#) == [.done(stopReason: "stop")])
         #expect(try OpenAIStreamDecoder.decode("[DONE]") == [])
+    }
+
+    @Test func midStreamErrorThrowsAPIMessage() {
+        // OpenRouter and others send `{"error": …}` with no `choices` once the stream has started.
+        let error = #expect(throws: LLMError.self) {
+            try OpenAIStreamDecoder.decode(#"{"error":{"message":"Rate limited","code":429}}"#)
+        }
+        #expect(error?.localizedDescription == "Rate limited")
     }
 
     @Test func systemPromptBecomesFirstMessage() throws {
