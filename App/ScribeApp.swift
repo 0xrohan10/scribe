@@ -24,6 +24,11 @@ struct ScribeApp: App {
             MenuBarLabel(model: model)
         }
 
+        Window("Library", id: "library") {
+            LibraryWindow(library: model.library, app: model)
+        }
+        .defaultSize(width: 980, height: 620)
+
         Settings {
             SettingsView(model: model)
         }
@@ -45,14 +50,16 @@ private struct MenuBarLabel: View {
 @MainActor
 final class MeetingWindowController {
     private var window: NSWindow?
+    private var meetingID: UUID?
 
-    func close() {
-        window?.close()
+    func close(ifShowing meetingID: UUID) {
+        if self.meetingID == meetingID { window?.close() }
     }
 
     func show(_ vm: MeetingViewModel, app: AppModel) {
         let window = window ?? makeWindow()
         self.window = window
+        meetingID = vm.id
         window.title = vm.meeting.title
         window.contentViewController = NSHostingController(rootView: MeetingWindow(vm: vm, app: app))
         NSApp.activate()

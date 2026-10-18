@@ -26,8 +26,9 @@ public final class ScribeDatabase: Sendable {
     public var transcripts: some TranscriptRepository { GRDBTranscriptRepository(writer: writer) }
     public var notes: some NoteRepository { GRDBNoteRepository(writer: writer) }
     public var summaries: some SummaryRepository { GRDBSummaryRepository(writer: writer) }
+    public var library: some LibraryRepository { GRDBLibraryRepository(writer: writer) }
 
-    private static var migrator: DatabaseMigrator {
+    static var migrator: DatabaseMigrator {
         var migrator = DatabaseMigrator()
         migrator.registerMigration("v1") { db in
             try db.create(table: "meeting") { t in
@@ -63,6 +64,23 @@ public final class ScribeDatabase: Sendable {
                 t.column("payload", .text).notNull()
                 t.column("createdAt", .datetime).notNull()
             }
+        }
+        migrator.registerMigration("v2-folders-and-tags") { db in
+            try db.create(table: "folder") { t in
+                t.primaryKey("id", .blob)
+                t.column("name", .text).notNull().unique().collate(.nocase)
+                t.column("createdAt", .datetime).notNull()
+            }
+            // Not part of MeetingRecord, so the session's re-saves of a meeting never touch it.
+            try db.alter(table: "meeting") { t in
+                t.add(column: "folderID", .blob).references("folder", onDelete: .setNull)
+            }
+            try db.create(table: "meetingTag") { t in
+                t.column("meetingID", .blob).notNull().references("meeting", onDelete: .cascade)
+                t.column("name", .text).notNull().collate(.nocase)
+                t.primaryKey(["meetingID", "name"])
+            }
+            try db.create(index: "meetingTag_on_name", on: "meetingTag", columns: ["name"])
         }
         return migrator
     }

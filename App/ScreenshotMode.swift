@@ -20,32 +20,42 @@ enum ScreenshotMode {
         return URL(filePath: args[i + 1], directoryHint: .isDirectory)
     }()
 
+    /// Shared by the preview model and the demo meetings, so the library sees them.
+    private static let database = try! ScribeDatabase.inMemory()
+
     static func makeModel() -> AppModel {
         var settings = AppSettings()
         settings.transcriptionProviderID = "speech-analyzer"
         settings.webSearchProviderID = "parallel"
         settings.searchGateProviderID = "jev"
-        return AppModel(preview: settings, secrets: DemoSecrets())
+        return AppModel(preview: settings, secrets: DemoSecrets(), database: database)
     }
 
     static func run(model: AppModel, to dir: URL) async {
         do {
             try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-            let db = try ScribeDatabase.inMemory()
+            let db = database
             let window = CGSize(width: 1240, height: 780)
 
             let live = try await liveMeeting(db)
-            try await snapshot(MeetingWindow(vm: live, app: model), size: window, to: dir.appending(path: "1-live-meeting.png"))
-
             let finished = try await finishedMeeting(db, withSummary: true)
             await finished.ask("What does Acme Billing charge for usage-based plans?")
-            try await snapshot(MeetingWindow(vm: finished, app: model), size: window, to: dir.appending(path: "2-summary.png"))
-
             let review = try await finishedMeeting(db, withSummary: false)
             review.focusedNote = review.notes.first { $0.flagged }
-            try await snapshot(MeetingWindow(vm: review, app: model), size: window, to: dir.appending(path: "3-note-highlight.png"))
+            try await organize(db, live: live.id, vendorCalls: [finished.id, review.id])
+            await model.library.reload()
 
+            try await snapshot(MeetingWindow(vm: live, app: model), size: window, to: dir.appending(path: "1-live-meeting.png"))
+            try await snapshot(MeetingWindow(vm: finished, app: model), size: window, to: dir.appending(path: "2-summary.png"))
+            try await snapshot(MeetingWindow(vm: review, app: model), size: window, to: dir.appending(path: "3-note-highlight.png"))
             try await snapshot(SettingsView(model: model), size: CGSize(width: 560, height: 520), to: dir.appending(path: "4-settings.png"))
+            // The split view's translucent sidebar doesn't render offscreen, so compose the same two views.
+            let library = HStack(spacing: 0) {
+                LibrarySidebar(library: model.library).frame(width: 220)
+                Divider()
+                LibraryMeetingList(library: model.library, app: model)
+            }
+            try await snapshot(library, size: CGSize(width: 980, height: 620), to: dir.appending(path: "5-library.png"))
             print("Saved screenshots to \(dir.path)")
             exit(0)
         } catch {
@@ -115,6 +125,31 @@ enum ScreenshotMode {
         return try await MeetingViewModel.review(
             meeting, transcripts: db.transcripts, noteRepository: db.notes, summaries: db.summaries,
             qa: QAEngine(llm: DemoLLM()), summarizer: nil)
+    }
+
+    /// Folders, tags and a few older meetings so the library has something to show.
+    private static func organize(_ db: ScribeDatabase, live: UUID, vendorCalls: [UUID]) async throws {
+        let vendors = try await db.library.createFolder(named: "Vendors")
+        let product = try await db.library.createFolder(named: "Product")
+        let oneOnOnes = try await db.library.createFolder(named: "1:1s")
+        for id in vendorCalls {
+            try await db.library.move(meetingID: id, toFolder: vendors.id)
+            try await db.library.setTags(["acme", "billing"], meetingID: id)
+        }
+        try await db.library.move(meetingID: live, toFolder: product.id)
+        try await db.library.setTags(["roadmap", "q4"], meetingID: live)
+        let older: [(String, MeetingApp, Double, UUID?, [String])] = [
+            ("Weekly sync with Priya", .teams, 2, oneOnOnes.id, ["career"]),
+            ("Design review: onboarding", .zoom, 3, product.id, ["design", "q4"]),
+            ("Candidate interview: backend", .meet, 5, nil, ["hiring"]),
+        ]
+        for (title, app, daysAgo, folder, tags) in older {
+            let start = Date.now.addingTimeInterval(-daysAgo * 86_400)
+            let meeting = Meeting(title: title, app: app, startedAt: start, endedAt: start.addingTimeInterval(1_800 + daysAgo * 300))
+            try await db.meetings.save(meeting)
+            try await db.library.move(meetingID: meeting.id, toFolder: folder)
+            try await db.library.setTags(tags, meetingID: meeting.id)
+        }
     }
 
     // MARK: Rendering

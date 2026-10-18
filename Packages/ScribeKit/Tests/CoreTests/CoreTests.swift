@@ -24,6 +24,22 @@ import Testing
     }
 }
 
+@Suite struct LibraryModelTests {
+    @Test func normalizesTags() {
+        #expect(Tags.normalize(["  #Acme ", "acme", "q4   planning", "", "#"]) == ["Acme", "q4 planning"])
+    }
+
+    @Test func filters() {
+        let folder = UUID()
+        let filed = LibraryEntry(meeting: Meeting(title: "a"), folderID: folder, tags: ["Acme"])
+        let loose = LibraryEntry(meeting: Meeting(title: "b"))
+        #expect(LibraryFilter.folder(folder).matches(filed) && !LibraryFilter.folder(folder).matches(loose))
+        #expect(LibraryFilter.unfiled.matches(loose) && !LibraryFilter.unfiled.matches(filed))
+        #expect(LibraryFilter.tag("acme").matches(filed) && !LibraryFilter.tag("acme").matches(loose))
+        #expect(LibraryFilter.all.matches(filed) && LibraryFilter.all.matches(loose))
+    }
+}
+
 @Suite struct RegistryTests {
     @Test func enforcesAPIKeyAndAvailability() throws {
         var r = ProviderRegistry<String>()

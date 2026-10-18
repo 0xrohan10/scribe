@@ -3,6 +3,7 @@ import SwiftUI
 
 struct MenuBarContent: View {
     let model: AppModel
+    @Environment(\.openWindow) private var openWindow
 
     var body: some View {
         if let current = model.current, current.isRecording {
@@ -28,6 +29,11 @@ struct MenuBarContent: View {
         }
 
         Divider()
+        Button("Library…") {
+            NSApp.activate()
+            openWindow(id: "library")
+        }
+        .keyboardShortcut("l")
         Menu("Recent Meetings") {
             if model.recentMeetings.isEmpty { Text("None yet") }
             ForEach(model.recentMeetings) { meeting in

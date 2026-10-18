@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		03E3AD8C32319624C23126FF /* LibraryModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = EEB567B7E682A1AE935CB4C1 /* LibraryModel.swift */; };
 		07738FBE1CECDEFA3B4E68F3 /* MenuBarContent.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6F8930B1AC1567B6AEC0D082 /* MenuBarContent.swift */; };
 		0D2DBF580CCEEAC20329C656 /* NotesPane.swift in Sources */ = {isa = PBXBuildFile; fileRef = D032A92E1A776B63CF579C52 /* NotesPane.swift */; };
 		1F5F5361260BE8D4BBB2DA0F /* MeetingViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 70FAC61B33B651C04DD30C49 /* MeetingViewModel.swift */; };
@@ -16,6 +17,7 @@
 		57673A0F4A94845D463F0BB0 /* AskPane.swift in Sources */ = {isa = PBXBuildFile; fileRef = 448E4B004B86B087932ED640 /* AskPane.swift */; };
 		7EEE414584CE68A16B090687 /* AppModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = C94E99AA2B846206980C64F7 /* AppModel.swift */; };
 		85191DE569E6773587D5EB9F /* ScreenshotMode.swift in Sources */ = {isa = PBXBuildFile; fileRef = 55B68F01E41FBC6C6D258F68 /* ScreenshotMode.swift */; };
+		86D23C4181BE430ADC29F3F6 /* LibraryWindow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 141EDE066AC8EFADEBAA36BA /* LibraryWindow.swift */; };
 		A1D740A1FA748F2727660A1A /* Transcription in Frameworks */ = {isa = PBXBuildFile; productRef = 32B52F283C8DAB662CF4AA43 /* Transcription */; };
 		A89AFEB23C64F67DDE841DDB /* Persistence in Frameworks */ = {isa = PBXBuildFile; productRef = 861320D543AACB6A9A0318E8 /* Persistence */; };
 		ABA1AC2311F52903EE98729A /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F3580E66CDA7CD267E461398 /* SettingsView.swift */; };
@@ -34,6 +36,7 @@
 /* Begin PBXFileReference section */
 		0DCB762DB579E32437716DE1 /* SummaryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SummaryView.swift; sourceTree = "<group>"; };
 		11345C81116DC36BA7419B25 /* Scribe.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Scribe.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		141EDE066AC8EFADEBAA36BA /* LibraryWindow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LibraryWindow.swift; sourceTree = "<group>"; };
 		31DB739FFBD266E116F4A6DF /* TranscriptView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TranscriptView.swift; sourceTree = "<group>"; };
 		3F0D6E6C7B6B0F984774CABC /* MeetingWindow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MeetingWindow.swift; sourceTree = "<group>"; };
 		448E4B004B86B087932ED640 /* AskPane.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AskPane.swift; sourceTree = "<group>"; };
@@ -49,6 +52,7 @@
 		C94E99AA2B846206980C64F7 /* AppModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppModel.swift; sourceTree = "<group>"; };
 		D032A92E1A776B63CF579C52 /* NotesPane.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotesPane.swift; sourceTree = "<group>"; };
 		D8A4185F90A9B7DA90FBE803 /* Providers.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Providers.swift; sourceTree = "<group>"; };
+		EEB567B7E682A1AE935CB4C1 /* LibraryModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LibraryModel.swift; sourceTree = "<group>"; };
 		F3580E66CDA7CD267E461398 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -85,6 +89,7 @@
 			children = (
 				C94E99AA2B846206980C64F7 /* AppModel.swift */,
 				7E2E63FAF04FEF1780599325 /* Info.plist */,
+				EEB567B7E682A1AE935CB4C1 /* LibraryModel.swift */,
 				50EB6AAADE2F4C1F7A4D78BC /* MeetingPrompter.swift */,
 				70FAC61B33B651C04DD30C49 /* MeetingViewModel.swift */,
 				D8A4185F90A9B7DA90FBE803 /* Providers.swift */,
@@ -116,6 +121,7 @@
 			isa = PBXGroup;
 			children = (
 				448E4B004B86B087932ED640 /* AskPane.swift */,
+				141EDE066AC8EFADEBAA36BA /* LibraryWindow.swift */,
 				3F0D6E6C7B6B0F984774CABC /* MeetingWindow.swift */,
 				6F8930B1AC1567B6AEC0D082 /* MenuBarContent.swift */,
 				D032A92E1A776B63CF579C52 /* NotesPane.swift */,
@@ -209,6 +215,8 @@
 			files = (
 				7EEE414584CE68A16B090687 /* AppModel.swift in Sources */,
 				57673A0F4A94845D463F0BB0 /* AskPane.swift in Sources */,
+				03E3AD8C32319624C23126FF /* LibraryModel.swift in Sources */,
+				86D23C4181BE430ADC29F3F6 /* LibraryWindow.swift in Sources */,
 				F94C7D486F3E7A25D018978B /* MeetingPrompter.swift in Sources */,
 				1F5F5361260BE8D4BBB2DA0F /* MeetingViewModel.swift in Sources */,
 				D7DADF271B65843472A532F0 /* MeetingWindow.swift in Sources */,

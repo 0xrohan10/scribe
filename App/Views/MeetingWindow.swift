@@ -11,6 +11,9 @@ struct MeetingWindow: View {
     var body: some View {
         VStack(spacing: 0) {
             header
+            OrganizeBar(meetingID: vm.id, library: app.library)
+                .padding(.horizontal, 16)
+                .padding(.bottom, 8)
             if !vm.warnings.isEmpty { warnings }
             Divider()
             HSplitView {
@@ -45,7 +48,7 @@ struct MeetingWindow: View {
             } else if vm.state == .finished {
                 Button(vm.summary == nil ? "Summarize" : "Regenerate", systemImage: "sparkles") { Task { await vm.regenerateSummary() } }
                     .disabled(vm.isRegenerating || vm.transcript.isEmpty)
-                Button("Delete", systemImage: "trash", role: .destructive) { app.deleteMeeting(vm) }
+                Button("Delete", systemImage: "trash", role: .destructive) { app.deleteMeeting(vm.meeting) }
                     .labelStyle(.iconOnly)
                     .buttonStyle(.bordered)
                     .disabled(vm.isRegenerating)

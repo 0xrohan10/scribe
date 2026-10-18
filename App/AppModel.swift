@@ -22,6 +22,7 @@ final class AppModel {
     var lastError: String?
 
     let secrets: any SecretStore
+    let library: LibraryModel
     @ObservationIgnored private let settingsStore: SettingsStore
     @ObservationIgnored private let database: ScribeDatabase
     @ObservationIgnored private let audioFiles: DiskAudioFileStore
@@ -47,6 +48,7 @@ final class AppModel {
             database = try! ScribeDatabase.inMemory()
             lastError = "Couldn't open the database, so nothing will be saved: \(error.localizedDescription)"
         }
+        library = LibraryModel(repository: database.library)
 
         prompter.onRecord = { [weak self] in self?.startMeeting(from: self?.detectedMeeting) }
         prompter.onStop = { [weak self] in Task { await self?.current?.stop() } }
@@ -57,11 +59,12 @@ final class AppModel {
 
     #if DEBUG
     /// For screenshots: in-memory stores; no detection, notifications, Keychain or saved settings.
-    init(preview settings: AppSettings, secrets: any SecretStore) {
+    init(preview settings: AppSettings, secrets: any SecretStore, database: ScribeDatabase) {
         self.secrets = secrets
         settingsStore = SettingsStore(defaults: UserDefaults(suiteName: "scribe.preview")!)
         self.settings = settings
-        database = try! ScribeDatabase.inMemory()
+        self.database = database
+        library = LibraryModel(repository: database.library)
         audioFiles = DiskAudioFileStore(root: URL.temporaryDirectory.appending(path: "scribe-preview"))
     }
     #endif
@@ -158,6 +161,7 @@ final class AppModel {
                     return
                 }
                 await vm.start()
+                await refreshRecent()
             }
         } catch {
             lastError = error.localizedDescription
@@ -188,11 +192,11 @@ final class AppModel {
     }
 
     /// Deletes a finished meeting: transcript, notes and summary (via cascade) plus its audio files.
-    func deleteMeeting(_ vm: MeetingViewModel) {
-        guard vm.state == .finished else { return }
+    func deleteMeeting(_ meeting: Meeting) {
+        if let current, current.id == meeting.id, current.isLive, current.state != .finished { return }
         NSApp.activate()
         let alert = NSAlert()
-        alert.messageText = "Delete “\(vm.meeting.title)”?"
+        alert.messageText = "Delete “\(meeting.title)”?"
         alert.informativeText = "This deletes the transcript, notes, summary and audio recordings. It can't be undone."
         alert.alertStyle = .warning
         alert.addButton(withTitle: "Delete").hasDestructiveAction = true
@@ -201,19 +205,20 @@ final class AppModel {
 
         Task {
             do {
-                try await database.meetings.delete(id: vm.id)
-                try audioFiles.deleteRecordings(meetingID: vm.id)
+                try await database.meetings.delete(id: meeting.id)
+                try audioFiles.deleteRecordings(meetingID: meeting.id)
             } catch {
                 lastError = "Couldn't delete the meeting: \(error.localizedDescription)"
             }
-            if current?.id == vm.id { current = nil }
-            meetingWindow.close()
+            if current?.id == meeting.id { current = nil }
+            meetingWindow.close(ifShowing: meeting.id)
             await refreshRecent()
         }
     }
 
     func refreshRecent() async {
         recentMeetings = (try? await database.meetings.recent(limit: 15)) ?? []
+        await library.reload()
     }
 
     // MARK: Helpers
