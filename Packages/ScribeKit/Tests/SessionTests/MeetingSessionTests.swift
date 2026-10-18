@@ -84,6 +84,23 @@ private struct GatedSummarizer: MeetingSummarizer {
     }
 }
 
+/// Ignores the end of its audio and the session's cancellation, and keeps sending text, like a stuck
+/// network provider that eventually wakes up.
+private struct StubbornTranscriber: TranscriptionProvider {
+    let id = "stubborn"
+    func transcribe(_ audio: AsyncStream<AudioChunk>) -> AsyncThrowingStream<TranscriptSegment, Error> {
+        let (stream, continuation) = AsyncThrowingStream.makeStream(of: TranscriptSegment.self)
+        Task.detached {
+            continuation.yield(TranscriptSegment(speaker: .them, text: "on time", start: 0, end: 1, isFinal: true))
+            for await _ in audio {}
+            try? await Task.sleep(for: .milliseconds(300))
+            continuation.yield(TranscriptSegment(speaker: .them, text: "too late", start: 1, end: 2, isFinal: true))
+            continuation.finish()
+        }
+        return stream
+    }
+}
+
 @Suite struct MeetingSessionTests {
     private func environment(_ store: MemoryStore, sources: [any AudioSource], summarizer: any MeetingSummarizer = EchoSummarizer()) -> SessionEnvironment {
         SessionEnvironment(
@@ -188,6 +205,23 @@ private struct GatedSummarizer: MeetingSummarizer {
         try await session.start()
         if case .failed = await session.state {} else { Issue.record("expected failed state") }
         #expect(await store.meeting(id: session.meetingID) == nil)
+    }
+
+    @Test func textAfterStopTimeoutIsDropped() async throws {
+        let store = MemoryStore()
+        var env = environment(store, sources: [FakeAudioSource(.mic)])
+        env.transcriber = StubbornTranscriber()
+        env.drainTimeout = .milliseconds(100)
+        let session = MeetingSession(meeting: Meeting(title: "T"), scope: .allApps, environment: env)
+        try await session.start()
+        // Let "on time" arrive before stopping.
+        while await session.transcript.isEmpty { await Task.yield() }
+        await session.stop()
+        try await Task.sleep(for: .milliseconds(500))
+
+        let saved = await store.segments(meetingID: session.meetingID).map(\.text)
+        #expect(saved == ["on time"])
+        #expect(await session.transcript.segments.map(\.text) == ["on time"])
     }
 
     @Test func failsWhenNoSourceStarts() async {
