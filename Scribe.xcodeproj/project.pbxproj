@@ -15,6 +15,7 @@
 		45327FC491943C693F6912E3 /* Intelligence in Frameworks */ = {isa = PBXBuildFile; productRef = D8E4CF93679FA31824F5B4B8 /* Intelligence */; };
 		57673A0F4A94845D463F0BB0 /* AskPane.swift in Sources */ = {isa = PBXBuildFile; fileRef = 448E4B004B86B087932ED640 /* AskPane.swift */; };
 		7EEE414584CE68A16B090687 /* AppModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = C94E99AA2B846206980C64F7 /* AppModel.swift */; };
+		85191DE569E6773587D5EB9F /* ScreenshotMode.swift in Sources */ = {isa = PBXBuildFile; fileRef = 55B68F01E41FBC6C6D258F68 /* ScreenshotMode.swift */; };
 		A1D740A1FA748F2727660A1A /* Transcription in Frameworks */ = {isa = PBXBuildFile; productRef = 32B52F283C8DAB662CF4AA43 /* Transcription */; };
 		A89AFEB23C64F67DDE841DDB /* Persistence in Frameworks */ = {isa = PBXBuildFile; productRef = 861320D543AACB6A9A0318E8 /* Persistence */; };
 		ABA1AC2311F52903EE98729A /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F3580E66CDA7CD267E461398 /* SettingsView.swift */; };
@@ -37,6 +38,7 @@
 		3F0D6E6C7B6B0F984774CABC /* MeetingWindow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MeetingWindow.swift; sourceTree = "<group>"; };
 		448E4B004B86B087932ED640 /* AskPane.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AskPane.swift; sourceTree = "<group>"; };
 		50EB6AAADE2F4C1F7A4D78BC /* MeetingPrompter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MeetingPrompter.swift; sourceTree = "<group>"; };
+		55B68F01E41FBC6C6D258F68 /* ScreenshotMode.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScreenshotMode.swift; sourceTree = "<group>"; };
 		63CD9EF949526BFC9E70FD0F /* Signing.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Signing.xcconfig; sourceTree = "<group>"; };
 		6F8930B1AC1567B6AEC0D082 /* MenuBarContent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MenuBarContent.swift; sourceTree = "<group>"; };
 		70FAC61B33B651C04DD30C49 /* MeetingViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MeetingViewModel.swift; sourceTree = "<group>"; };
@@ -86,6 +88,7 @@
 				50EB6AAADE2F4C1F7A4D78BC /* MeetingPrompter.swift */,
 				70FAC61B33B651C04DD30C49 /* MeetingViewModel.swift */,
 				D8A4185F90A9B7DA90FBE803 /* Providers.swift */,
+				55B68F01E41FBC6C6D258F68 /* ScreenshotMode.swift */,
 				C2DBA317340F79FE570C9C7A /* Scribe.entitlements */,
 				880B91E8CAA267C8B8C2B36A /* ScribeApp.swift */,
 				AB0F93597E220BD30E8DD701 /* Views */,
@@ -212,6 +215,7 @@
 				07738FBE1CECDEFA3B4E68F3 /* MenuBarContent.swift in Sources */,
 				0D2DBF580CCEEAC20329C656 /* NotesPane.swift in Sources */,
 				24A6A5A5B04E4F058283FDD4 /* Providers.swift in Sources */,
+				85191DE569E6773587D5EB9F /* ScreenshotMode.swift in Sources */,
 				E8CCA56FC696EAA1FAE806B5 /* ScribeApp.swift in Sources */,
 				ABA1AC2311F52903EE98729A /* SettingsView.swift in Sources */,
 				C62E9FFCD26FEFDBE715487D /* SummaryView.swift in Sources */,

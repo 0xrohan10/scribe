@@ -21,8 +21,8 @@ final class AppModel {
     private(set) var recentMeetings: [Meeting] = []
     var lastError: String?
 
-    let secrets: any SecretStore = KeychainSecretStore()
-    @ObservationIgnored private let settingsStore = SettingsStore()
+    let secrets: any SecretStore
+    @ObservationIgnored private let settingsStore: SettingsStore
     @ObservationIgnored private let database: ScribeDatabase
     @ObservationIgnored private let audioFiles: DiskAudioFileStore
     @ObservationIgnored private let detector = MicTriggeredMeetingDetector()
@@ -37,6 +37,8 @@ final class AppModel {
 
     init() {
         let support = URL.applicationSupportDirectory.appending(path: "Scribe", directoryHint: .isDirectory)
+        secrets = KeychainSecretStore()
+        settingsStore = SettingsStore()
         settings = settingsStore.load()
         audioFiles = DiskAudioFileStore(root: support.appending(path: "Recordings", directoryHint: .isDirectory))
         do {
@@ -52,6 +54,17 @@ final class AppModel {
         Task { await runDetection() }
         Task { await refreshRecent() }
     }
+
+    #if DEBUG
+    /// For screenshots: in-memory stores; no detection, notifications, Keychain or saved settings.
+    init(preview settings: AppSettings, secrets: any SecretStore) {
+        self.secrets = secrets
+        settingsStore = SettingsStore(defaults: UserDefaults(suiteName: "scribe.preview")!)
+        self.settings = settings
+        database = try! ScribeDatabase.inMemory()
+        audioFiles = DiskAudioFileStore(root: URL.temporaryDirectory.appending(path: "scribe-preview"))
+    }
+    #endif
 
     // MARK: Detection
 

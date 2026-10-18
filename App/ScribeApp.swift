@@ -3,7 +3,19 @@ import SwiftUI
 
 @main
 struct ScribeApp: App {
-    @State private var model = AppModel()
+    @State private var model: AppModel
+
+    init() {
+        #if DEBUG
+        if let dir = ScreenshotMode.directory {
+            let model = ScreenshotMode.makeModel()
+            _model = State(initialValue: model)
+            Task { await ScreenshotMode.run(model: model, to: dir) }
+            return
+        }
+        #endif
+        _model = State(initialValue: AppModel())
+    }
 
     var body: some Scene {
         MenuBarExtra {

@@ -41,6 +41,8 @@ cd Packages/ScribeKit && swift test
 
 Run `swift test --sanitize=thread` after touching capture or session code. `CaptureSinkTests` only catches races on the recording file under the thread sanitizer.
 
+Debug builds can render the main screens with demo data, without permissions or API keys. Run the built app binary with `--screenshots <dir>`, for example `build/DerivedData/Build/Products/Debug/Scribe.app/Contents/MacOS/Scribe --screenshots build/screenshots`.
+
 Debug builds are signed ad hoc. That means macOS may ask again for permissions and Keychain access after rebuilds.
 
 ### Testing process taps (do this early)
