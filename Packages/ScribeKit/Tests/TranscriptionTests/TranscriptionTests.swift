@@ -21,6 +21,31 @@ import Testing
         #expect(segments[1].start == 10)
     }
 
+    @Test func segmenterEmitsPartialsThenFinalOnSilence() {
+        var segmenter = UtteranceSegmenter()
+        let speech = [Float](repeating: 0.1, count: 1600), silence = [Float](repeating: 0, count: 1600)
+        var out: [UtteranceSegmenter.Utterance] = []
+        var t = 5.0
+        for chunk in Array(repeating: silence, count: 10) + Array(repeating: speech, count: 25) + Array(repeating: silence, count: 10) {
+            if let u = segmenter.append(chunk, at: t) { out.append(u) }
+            t += 0.1
+        }
+        #expect(out.map(\.isFinal) == [false, false, true])
+        // Leading silence is trimmed to the 0.3 s pre-roll; the final ends after 0.8 s of trailing silence.
+        #expect(abs(out[2].start - 5.7) < 0.001)
+        #expect(abs(out[2].end - 9.3) < 0.001)
+        #expect(segmenter.flush() == nil)
+    }
+
+    @Test func segmenterCutsLongSpeechAndFlushesTail() {
+        var segmenter = UtteranceSegmenter()
+        let speech = [Float](repeating: 0.1, count: 16000)
+        var finals = 0
+        for i in 0..<30 where segmenter.append(speech, at: Double(i))?.isFinal == true { finals += 1 }
+        #expect(finals == 1)
+        #expect(segmenter.flush()?.isFinal == true)
+    }
+
     @Test func stubsFailWithNotImplemented() async {
         let (audio, input) = AsyncStream.makeStream(of: AudioChunk.self)
         input.finish()

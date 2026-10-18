@@ -10,12 +10,13 @@ let package = Package(
     dependencies: [
         .package(url: "https://github.com/groue/GRDB.swift.git", from: "7.0.0"),
         .package(url: "https://github.com/apple/swift-argument-parser.git", from: "1.5.0"),
+        .package(url: "https://github.com/argmaxinc/WhisperKit.git", from: "1.1.1"),
     ],
     targets: [
         .target(name: "Core"),
         .target(name: "Capture", dependencies: ["Core"]),
         .target(name: "Detection", dependencies: ["Core"]),
-        .target(name: "Transcription", dependencies: ["Core"]),
+        .target(name: "Transcription", dependencies: ["Core", .product(name: "WhisperKit", package: "WhisperKit")]),
         .target(name: "Intelligence", dependencies: ["Core"]),
         .target(name: "Notes", dependencies: ["Core"]),
         .target(name: "Session", dependencies: ["Core"]),
