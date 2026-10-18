@@ -29,6 +29,8 @@ final class AppModel {
     @ObservationIgnored private let prompter = MeetingPrompter()
     @ObservationIgnored private let meetingWindow = MeetingWindowController()
     @ObservationIgnored private var isSwitchingMeetings = false
+    /// SwiftUI's `openSettings`, captured from the menu bar label (AppKit can't open the Settings scene).
+    @ObservationIgnored var openSettings: (() -> Void)?
 
     var isRecording: Bool { current?.isRecording == true }
     var isCapturing: Bool { current?.isCapturing == true }
@@ -76,8 +78,12 @@ final class AppModel {
     /// Scribe records one meeting at a time. If one is still capturing, ask before stopping it.
     func startMeeting(from detected: DetectedMeeting? = nil) {
         guard !isSwitchingMeetings else { return }
+        guard let transcriberID = settings.transcriptionProviderID else {
+            askToChooseTranscriber()
+            return
+        }
         guard let current, current.isCapturing else {
-            beginMeeting(from: detected)
+            beginMeeting(from: detected, transcriberID: transcriberID)
             return
         }
         guard confirmStopping(current) else {
@@ -88,7 +94,7 @@ final class AppModel {
         Task {
             await current.stopCapture()
             isSwitchingMeetings = false
-            beginMeeting(from: detected)
+            beginMeeting(from: detected, transcriberID: transcriberID)
         }
     }
 
@@ -102,10 +108,20 @@ final class AppModel {
         return alert.runModal() == .alertFirstButtonReturn
     }
 
-    private func beginMeeting(from detected: DetectedMeeting?) {
+    private func askToChooseTranscriber() {
+        NSApp.activate()
+        let alert = NSAlert()
+        alert.messageText = "Choose a transcriber first"
+        alert.informativeText = "Scribe needs a transcription provider before it can record. Pick one in Settings ▸ Providers."
+        alert.addButton(withTitle: "Open Settings")
+        alert.addButton(withTitle: "Cancel")
+        if alert.runModal() == .alertFirstButtonReturn { openSettings?() }
+    }
+
+    private func beginMeeting(from detected: DetectedMeeting?, transcriberID: String) {
         prompter.withdrawRecordPrompt()
         do {
-            let transcriber = try makeProvider(Providers.transcription, id: settings.transcriptionProviderID)
+            let transcriber = try makeProvider(Providers.transcription, id: transcriberID)
             let llm = try? makeProvider(Providers.llm, id: settings.llmProviderID)
             let meeting = Meeting(title: Self.defaultTitle(for: detected?.app), app: detected?.app, templateID: settings.defaultTemplateID)
             let environment = SessionEnvironment(

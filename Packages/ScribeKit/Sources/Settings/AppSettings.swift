@@ -10,7 +10,8 @@ public enum SystemAudioMode: String, Codable, Sendable, CaseIterable {
 
 /// Non-secret preferences. API keys never live here; they're in the Keychain via `SecretStore`.
 public struct AppSettings: Codable, Sendable, Equatable {
-    public var transcriptionProviderID: String = "speech-analyzer"
+    /// No default: the user picks one before their first recording.
+    public var transcriptionProviderID: String?
     public var llmProviderID: String = "anthropic"
     /// Per-provider model override, keyed by provider id.
     public var models: [String: String] = [:]
@@ -27,7 +28,7 @@ public struct AppSettings: Codable, Sendable, Equatable {
         // Decode field-by-field with defaults so adding a setting never resets the others.
         let c = try decoder.container(keyedBy: CodingKeys.self)
         let d = AppSettings()
-        transcriptionProviderID = try c.decodeIfPresent(String.self, forKey: .transcriptionProviderID) ?? d.transcriptionProviderID
+        transcriptionProviderID = try c.decodeIfPresent(String.self, forKey: .transcriptionProviderID)
         llmProviderID = try c.decodeIfPresent(String.self, forKey: .llmProviderID) ?? d.llmProviderID
         models = try c.decodeIfPresent([String: String].self, forKey: .models) ?? d.models
         baseURLs = try c.decodeIfPresent([String: URL].self, forKey: .baseURLs) ?? d.baseURLs

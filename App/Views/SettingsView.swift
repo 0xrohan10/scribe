@@ -13,8 +13,10 @@ struct SettingsView: View {
             Form {
                 ProviderSection(
                     title: "Transcription", registry: Providers.transcription,
-                    selection: $model.settings.transcriptionProviderID, model: model)
-                ProviderSection(title: "AI (Q&A and summaries)", registry: Providers.llm, selection: $model.settings.llmProviderID, model: model)
+                    selection: $model.settings.transcriptionProviderID, allowsNone: true, model: model)
+                ProviderSection(
+                    title: "AI (Q&A and summaries)", registry: Providers.llm,
+                    selection: Binding($model.settings.llmProviderID), allowsNone: false, model: model)
             }
             .formStyle(.grouped)
             .tabItem { Label("Providers", systemImage: "cpu") }
@@ -44,17 +46,19 @@ struct SettingsView: View {
 private struct ProviderSection<P>: View {
     let title: String
     let registry: ProviderRegistry<P>
-    @Binding var selection: String
+    @Binding var selection: String?
+    let allowsNone: Bool
     @Bindable var model: AppModel
 
     var body: some View {
         Section(title) {
             Picker("Provider", selection: $selection) {
+                if allowsNone { Text("None").tag(String?.none) }
                 ForEach(registry.descriptors) { d in
-                    Text(d.isAvailable ? d.displayName : "\(d.displayName) (unavailable)").tag(d.id).disabled(!d.isAvailable)
+                    Text(d.isAvailable ? d.displayName : "\(d.displayName) (unavailable)").tag(Optional(d.id)).disabled(!d.isAvailable)
                 }
             }
-            if let descriptor = registry.descriptor(id: selection) {
+            if let selection, let descriptor = registry.descriptor(id: selection) {
                 ProviderFields(descriptor: descriptor, model: model).id(descriptor.id)
             }
         }

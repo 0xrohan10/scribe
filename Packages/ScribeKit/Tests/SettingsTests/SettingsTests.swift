@@ -16,6 +16,7 @@ private struct MemorySecrets: SecretStore {
         let store = SettingsStore(defaults: defaults)
         var settings = AppSettings()
         settings.llmProviderID = "openai-compatible"
+        settings.transcriptionProviderID = "speech-analyzer"
         settings.baseURLs["openai-compatible"] = URL(string: "http://localhost:11434/v1")
         store.save(settings)
         #expect(store.load() == settings)
@@ -24,7 +25,7 @@ private struct MemorySecrets: SecretStore {
     @Test func missingFieldsKeepDefaults() throws {
         let decoded = try JSONDecoder().decode(AppSettings.self, from: Data(#"{"llmProviderID":"x"}"#.utf8))
         #expect(decoded.llmProviderID == "x")
-        #expect(decoded.transcriptionProviderID == AppSettings().transcriptionProviderID)
+        #expect(decoded.transcriptionProviderID == nil)
     }
 
     @Test func configMergesKeychainAndOverrides() {

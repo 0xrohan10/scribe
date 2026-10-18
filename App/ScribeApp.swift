@@ -9,12 +9,22 @@ struct ScribeApp: App {
         MenuBarExtra {
             MenuBarContent(model: model)
         } label: {
-            Image(systemName: model.isRecording ? "record.circle.fill" : "waveform")
+            MenuBarLabel(model: model)
         }
 
         Settings {
             SettingsView(model: model)
         }
+    }
+}
+
+private struct MenuBarLabel: View {
+    let model: AppModel
+    @Environment(\.openSettings) private var openSettings
+
+    var body: some View {
+        Image(systemName: model.isRecording ? "record.circle.fill" : "waveform")
+            .onAppear { model.openSettings = { NSApp.activate(); openSettings() } }
     }
 }
 
