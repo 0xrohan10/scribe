@@ -61,13 +61,15 @@ public struct QAEngine: Sendable {
                     let transcriptText = await contextProvider.context(for: question, transcript: transcript)
                     var prompt = question
                     var tools: [LLMTool] = []
-                    if llm.capabilities.serverWebSearch {
-                        tools = [.webSearch(maxUses: 3)]
-                    } else if let webSearch {
+                    // A configured search tool wins over the provider's hosted search, so the choice in
+                    // Settings holds whichever model answers.
+                    if let webSearch {
                         continuation.yield(.activity("Searching the web…"))
                         let results = try await webSearch.search(question, maxResults: 5)
                         continuation.yield(.sources(results.map { WebSource(title: $0.title, url: $0.url) }))
                         prompt += "\n\n" + Prompts.webResults(results)
+                    } else if llm.capabilities.serverWebSearch {
+                        tools = [.webSearch(maxUses: 3)]
                     }
                     let request = LLMRequest(
                         system: Prompts.qaSystem(transcript: transcriptText, now: now),

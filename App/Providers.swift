@@ -18,4 +18,10 @@ enum Providers {
         r.register(.init(id: "openai-compatible", displayName: "OpenAI-compatible", needsBaseURL: true, defaultModel: "gpt-4.1", defaultBaseURL: OpenAICompatibleProvider.defaultBaseURL)) { OpenAICompatibleProvider(config: $0) }
         return r
     }()
+
+    static let webSearch: ProviderRegistry<any WebSearchTool> = {
+        var r = ProviderRegistry<any WebSearchTool>()
+        r.register(.init(id: "parallel", displayName: "Parallel", needsAPIKey: true, defaultBaseURL: ParallelSearchTool.defaultBaseURL)) { ParallelSearchTool(config: $0) }
+        return r
+    }()
 }

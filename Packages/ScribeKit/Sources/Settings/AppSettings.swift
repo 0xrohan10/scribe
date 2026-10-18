@@ -13,6 +13,8 @@ public struct AppSettings: Codable, Sendable, Equatable {
     /// No default: the user picks one before their first recording.
     public var transcriptionProviderID: String?
     public var llmProviderID: String = "anthropic"
+    /// Client-side web search for Q&A. When unset, the AI provider's own hosted search is used if it has one.
+    public var webSearchProviderID: String?
     /// Per-provider model override, keyed by provider id.
     public var models: [String: String] = [:]
     /// Per-provider base URL override, keyed by provider id.
@@ -30,6 +32,7 @@ public struct AppSettings: Codable, Sendable, Equatable {
         let d = AppSettings()
         transcriptionProviderID = try c.decodeIfPresent(String.self, forKey: .transcriptionProviderID)
         llmProviderID = try c.decodeIfPresent(String.self, forKey: .llmProviderID) ?? d.llmProviderID
+        webSearchProviderID = try c.decodeIfPresent(String.self, forKey: .webSearchProviderID)
         models = try c.decodeIfPresent([String: String].self, forKey: .models) ?? d.models
         baseURLs = try c.decodeIfPresent([String: URL].self, forKey: .baseURLs) ?? d.baseURLs
         systemAudioMode = try c.decodeIfPresent(SystemAudioMode.self, forKey: .systemAudioMode) ?? d.systemAudioMode

@@ -14,7 +14,7 @@ Packages/ScribeKit/       one SwiftPM target per domain; domains import only Cor
   Capture/                MicrophoneSource (AVAudioEngine), SystemAudioSource (process tap + aggregate device), m4a writing
   Detection/              mic-in-use listener, Zoom (CptHost) / Teams / Meet (AX window titles) probes, MicTriggeredMeetingDetector
   Transcription/          Fake, SpeechAnalyzer; WhisperKit / Deepgram / AssemblyAI / OpenAI Realtime are TODO stubs
-  Intelligence/           Anthropic (streaming + server web search), OpenAI-compatible, QAEngine, LLMSummarizer, prompts
+  Intelligence/           Anthropic (streaming + server web search), OpenAI-compatible, Parallel web search, QAEngine, LLMSummarizer, prompts
   Notes/                  NotesController, NoteDraft (anchors to when you *start* typing), NoteAnchoring
   Session/                MeetingSession: lifecycle state machine, per-source transcription, persistence fan-out
   Persistence/            GRDB database + repositories, DiskAudioFileStore
@@ -55,7 +55,7 @@ Leave out `--bundle` to tap all apps, or use `--bundle us.zoom.xos` for Zoom. Th
 
 ## Adding a provider
 
-1. Write an adapter conforming to `TranscriptionProvider` or `LLMProvider` in its own folder under `Transcription/` or `Intelligence/Providers/`.
+1. Write an adapter conforming to `TranscriptionProvider`, `LLMProvider` or `WebSearchTool` in its own folder under `Transcription/`, `Intelligence/Providers/` or `Intelligence/WebSearch/`.
 2. Add one `register` line in `App/Providers.swift`.
 
 ## Release

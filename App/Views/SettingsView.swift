@@ -17,6 +17,9 @@ struct SettingsView: View {
                 ProviderSection(
                     title: "AI (Q&A and summaries)", registry: Providers.llm,
                     selection: Binding($model.settings.llmProviderID), allowsNone: false, model: model)
+                ProviderSection(
+                    title: "Web search (Q&A)", registry: Providers.webSearch,
+                    selection: $model.settings.webSearchProviderID, allowsNone: true, model: model)
             }
             .formStyle(.grouped)
             .tabItem { Label("Providers", systemImage: "cpu") }

@@ -17,6 +17,7 @@ private struct MemorySecrets: SecretStore {
         var settings = AppSettings()
         settings.llmProviderID = "openai-compatible"
         settings.transcriptionProviderID = "speech-analyzer"
+        settings.webSearchProviderID = "parallel"
         settings.baseURLs["openai-compatible"] = URL(string: "http://localhost:11434/v1")
         store.save(settings)
         #expect(store.load() == settings)

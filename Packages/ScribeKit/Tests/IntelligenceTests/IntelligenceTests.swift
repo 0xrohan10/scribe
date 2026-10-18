@@ -107,6 +107,17 @@ import Testing
         #expect(request.system?.contains("[0:55] Them: Ship on Monday.") == true)
     }
 
+    @Test func configuredSearchToolWinsOverHostedSearch() async throws {
+        let llm = RecordingLLM()
+        let engine = QAEngine(llm: llm, webSearch: FakeSearch())
+        var sources: [WebSource] = []
+        for try await case .sources(let s) in engine.answer("What's their pricing?", transcript: transcript, now: 61) { sources += s }
+        let request = try #require(await llm.last)
+        #expect(request.tools.isEmpty)
+        #expect(request.messages.last?.content.contains("[1] Pricing — https://example.com/pricing\n$10/seat") == true)
+        #expect(sources == [WebSource(title: "Pricing", url: URL(string: "https://example.com/pricing")!)])
+    }
+
     @Test func rollingContextTrimsToWholeLines() async {
         let context = await RollingTranscriptContext(maxCharacters: 40).context(for: "", transcript: transcript)
         #expect(context.hasPrefix("[…earlier transcript omitted…]\n["))
@@ -139,6 +150,39 @@ import Testing
             notes: [Note(meetingID: meeting.id, text: "budget?", timestamp: 65, flagged: true)])
         #expect(input.contains("★ [1:05] budget?"))
         #expect(input.range(of: "<my_notes")!.lowerBound < input.range(of: "<transcript>")!.lowerBound)
+    }
+}
+
+private struct FakeSearch: WebSearchTool {
+    let id = "fake"
+    func search(_ query: String, maxResults: Int) async throws -> [WebSearchResult] {
+        [WebSearchResult(title: "Pricing", url: URL(string: "https://example.com/pricing")!, snippet: "$10/seat")]
+    }
+}
+
+@Suite struct ParallelSearchTests {
+    @Test func buildsFastSearchRequest() throws {
+        let request = try ParallelSearchTool(config: ProviderConfig(apiKey: "pk")).urlRequest("acme pricing", maxResults: 5)
+        #expect(request.url?.absoluteString == "https://api.parallel.ai/v1/search")
+        #expect(request.value(forHTTPHeaderField: "x-api-key") == "pk")
+        let body = try JSONSerialization.jsonObject(with: request.httpBody!) as! [String: Any]
+        #expect(body["search_queries"] as? [String] == ["acme pricing"])
+        #expect(body["objective"] as? String == "acme pricing")
+        #expect(body["mode"] as? String == "fast")
+        #expect((body["advanced_settings"] as? [String: Any])?["max_results"] as? Int == 5)
+    }
+
+    @Test func decodesResultsJoiningExcerpts() throws {
+        let json = #"{"search_id":"s1","results":[{"url":"https://a.com","title":"A","publish_date":null,"excerpts":["one","two"]},{"url":"https://b.com","title":null,"excerpts":[]}],"warnings":null,"usage":[]}"#
+        let results = try ParallelSearchTool.decode(Data(json.utf8), status: 200)
+        #expect(results.map(\.snippet) == ["one\ntwo", ""])
+        #expect(results.map(\.title) == ["A", "https://b.com"])
+    }
+
+    @Test func surfacesAPIErrorMessage() {
+        let json = #"{"type":"error","error":{"ref_id":"r1","message":"Invalid API key"}}"#
+        let error = #expect(throws: LLMError.self) { try ParallelSearchTool.decode(Data(json.utf8), status: 401) }
+        #expect(error?.localizedDescription == "HTTP 401: Invalid API key")
     }
 }
 

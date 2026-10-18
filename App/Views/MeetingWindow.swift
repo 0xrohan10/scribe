@@ -45,6 +45,11 @@ struct MeetingWindow: View {
             } else if vm.state == .finished {
                 Button(vm.summary == nil ? "Summarize" : "Regenerate", systemImage: "sparkles") { Task { await vm.regenerateSummary() } }
                     .disabled(vm.isRegenerating || vm.transcript.isEmpty)
+                Button("Delete", systemImage: "trash", role: .destructive) { app.deleteMeeting(vm) }
+                    .labelStyle(.iconOnly)
+                    .buttonStyle(.bordered)
+                    .disabled(vm.isRegenerating)
+                    .help("Delete this meeting and its recordings")
             }
         }
         .buttonStyle(.borderedProminent)

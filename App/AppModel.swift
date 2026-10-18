@@ -134,7 +134,7 @@ final class AppModel {
             let vm = MeetingViewModel(
                 meeting: meeting, session: session,
                 notes: NotesController(meetingID: meeting.id, clock: session.clock, repository: database.notes),
-                qa: llm.map { QAEngine(llm: $0) }, summarizer: llm.map { LLMSummarizer(llm: $0) },
+                qa: llm.map(makeQA), summarizer: llm.map { LLMSummarizer(llm: $0) },
                 summaries: database.summaries, onFinish: { [weak self] in Task { await self?.refreshRecent() } })
             current = vm
             meetingWindow.show(vm, app: self)
@@ -165,12 +165,37 @@ final class AppModel {
                 let llm = try? makeProvider(Providers.llm, id: settings.llmProviderID)
                 let vm = try await MeetingViewModel.review(
                     meeting, transcripts: database.transcripts, noteRepository: database.notes, summaries: database.summaries,
-                    qa: llm.map { QAEngine(llm: $0) }, summarizer: llm.map { LLMSummarizer(llm: $0) })
+                    qa: llm.map(makeQA), summarizer: llm.map { LLMSummarizer(llm: $0) })
                 if !isCapturing { current = vm }
                 meetingWindow.show(vm, app: self)
             } catch {
                 lastError = error.localizedDescription
             }
+        }
+    }
+
+    /// Deletes a finished meeting: transcript, notes and summary (via cascade) plus its audio files.
+    func deleteMeeting(_ vm: MeetingViewModel) {
+        guard vm.state == .finished else { return }
+        NSApp.activate()
+        let alert = NSAlert()
+        alert.messageText = "Delete “\(vm.meeting.title)”?"
+        alert.informativeText = "This deletes the transcript, notes, summary and audio recordings. It can't be undone."
+        alert.alertStyle = .warning
+        alert.addButton(withTitle: "Delete").hasDestructiveAction = true
+        alert.addButton(withTitle: "Cancel")
+        guard alert.runModal() == .alertFirstButtonReturn else { return }
+
+        Task {
+            do {
+                try await database.meetings.delete(id: vm.id)
+                try audioFiles.deleteRecordings(meetingID: vm.id)
+            } catch {
+                lastError = "Couldn't delete the meeting: \(error.localizedDescription)"
+            }
+            if current?.id == vm.id { current = nil }
+            meetingWindow.close()
+            await refreshRecent()
         }
     }
 
@@ -183,6 +208,12 @@ final class AppModel {
     private func makeProvider<P>(_ registry: ProviderRegistry<P>, id: String) throws -> P {
         guard let descriptor = registry.descriptor(id: id) else { throw ProviderError.unknownProvider(id) }
         return try registry.make(id: id, config: settings.config(for: descriptor, secrets: secrets))
+    }
+
+    private func makeQA(_ llm: any LLMProvider) -> QAEngine {
+        // A misconfigured search provider (e.g. no API key) falls back to the AI provider's own search.
+        let webSearch = settings.webSearchProviderID.flatMap { try? makeProvider(Providers.webSearch, id: $0) }
+        return QAEngine(llm: llm, webSearch: webSearch)
     }
 
     private func systemAudioScope(for detected: DetectedMeeting?) -> SystemAudioScope {

@@ -29,8 +29,8 @@ final class MeetingViewModel: Identifiable {
     private(set) var summary: MeetingSummary?
     private(set) var isRegenerating = false
     var warnings: [String] = []
-    /// Transcript time the user jumped to from a note.
-    var focusTime: TimeInterval?
+    /// The note whose moment the transcript is showing.
+    var focusedNote: Note?
 
     @ObservationIgnored private let session: MeetingSession?
     @ObservationIgnored private let notesController: NotesController

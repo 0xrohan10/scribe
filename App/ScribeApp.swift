@@ -34,6 +34,10 @@ private struct MenuBarLabel: View {
 final class MeetingWindowController {
     private var window: NSWindow?
 
+    func close() {
+        window?.close()
+    }
+
     func show(_ vm: MeetingViewModel, app: AppModel) {
         let window = window ?? makeWindow()
         self.window = window

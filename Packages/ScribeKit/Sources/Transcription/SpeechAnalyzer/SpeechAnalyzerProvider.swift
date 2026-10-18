@@ -74,33 +74,42 @@ private struct SpeechAnalyzerEngine {
         // The stream carries a single source, so the speaker is fixed once the first chunk arrives.
         let speaker = OSAllocatedUnfairLock(initialState: Speaker.them)
 
-        let reader = Task {
-            // Volatile results refine the not-yet-final tail; reuse one id until it's finalized.
-            var pendingID = UUID()
-            for try await result in transcriber.results {
-                let text = String(result.text.characters).trimmingCharacters(in: .whitespacesAndNewlines)
-                guard !text.isEmpty else { continue }
-                out.yield(
-                    TranscriptSegment(
-                        id: pendingID, speaker: speaker.withLock { $0 }, text: text,
-                        start: result.range.start.seconds, end: result.range.end.seconds, isFinal: result.isFinal))
-                if result.isFinal { pendingID = UUID() }
+        // The reader is a child task, so it's cancelled whenever feeding throws or this task is cancelled.
+        try await withThrowingTaskGroup(of: Void.self) { group in
+            group.addTask {
+                // Volatile results refine the not-yet-final tail; reuse one id until it's finalized.
+                var pendingID = UUID()
+                for try await result in transcriber.results {
+                    let text = String(result.text.characters).trimmingCharacters(in: .whitespacesAndNewlines)
+                    guard !text.isEmpty else { continue }
+                    out.yield(
+                        TranscriptSegment(
+                            id: pendingID, speaker: speaker.withLock { $0 }, text: text,
+                            start: result.range.start.seconds, end: result.range.end.seconds, isFinal: result.isFinal))
+                    if result.isFinal { pendingID = UUID() }
+                }
             }
-        }
 
-        try await analyzer.start(inputSequence: inputs)
-        let converter = PCMConverter(to: format)
-        var first = true
-        for await chunk in audio {
-            if first { speaker.withLock { $0 = chunk.source.speaker } }
-            guard let buffer = converter.convert(chunk) else { continue }
-            // Anchor the analyzer's timeline to the session clock once; later buffers are assumed contiguous.
-            let start = first ? CMTime(seconds: chunk.timestamp, preferredTimescale: 1_000_000) : nil
-            inputContinuation.yield(AnalyzerInput(buffer: buffer, bufferStartTime: start))
-            first = false
+            do {
+                try await analyzer.start(inputSequence: inputs)
+                let converter = PCMConverter(to: format)
+                var first = true
+                for await chunk in audio {
+                    if first { speaker.withLock { $0 = chunk.source.speaker } }
+                    guard let buffer = converter.convert(chunk) else { continue }
+                    // Anchor the analyzer's timeline to the session clock once; later buffers are assumed contiguous.
+                    let start = first ? CMTime(seconds: chunk.timestamp, preferredTimescale: 1_000_000) : nil
+                    inputContinuation.yield(AnalyzerInput(buffer: buffer, bufferStartTime: start))
+                    first = false
+                }
+                inputContinuation.finish()
+                try await analyzer.finalizeAndFinishThroughEndOfInput()
+            } catch {
+                inputContinuation.finish()
+                await analyzer.cancelAndFinishNow()
+                throw error
+            }
+            try await group.waitForAll()
         }
-        inputContinuation.finish()
-        try await analyzer.finalizeAndFinishThroughEndOfInput()
-        try await reader.value
     }
 }

@@ -55,7 +55,7 @@ private struct NoteRow: View {
 
     var body: some View {
         HStack(alignment: .firstTextBaseline, spacing: 8) {
-            Button(note.timestamp.clockString) { vm.focusTime = note.timestamp }
+            Button(note.timestamp.clockString) { vm.focusedNote = note }
                 .buttonStyle(.link)
                 .font(.caption.monospacedDigit())
                 .help("Show in transcript")
