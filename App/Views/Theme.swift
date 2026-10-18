@@ -168,13 +168,16 @@ extension Color {
     }
 }
 
-/// Scribe's mark: a waveform in an ink rounded square, beside the wordmark.
+/// Scribe's mark in an ink rounded square, beside the wordmark. The mark is drawn by scripts/make-icons.swift,
+/// which also makes the app icon and the menu bar icon from it.
 struct ScribeLogo: View {
     var body: some View {
         HStack(spacing: 8) {
-            Image(systemName: "waveform")
-                .font(.system(size: 11, weight: .bold))
+            Image("ScribeMark")
+                .resizable()
+                .frame(width: 15, height: 15)
                 .foregroundStyle(Theme.onAccent)
+                .accessibilityHidden(true)
                 .frame(width: 22, height: 22)
                 .background(Theme.accent, in: RoundedRectangle(cornerRadius: 6, style: .continuous))
             Text("Scribe").font(.system(size: 16, weight: .semibold))

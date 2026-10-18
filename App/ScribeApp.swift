@@ -25,7 +25,11 @@ struct ScribeApp: App {
         MenuBarExtra {
             MenuBarContent(model: model)
         } label: {
-            Image(systemName: model.isRecording ? "record.circle.fill" : "waveform")
+            if model.isRecording {
+                Image(systemName: "record.circle.fill")
+            } else {
+                Image("ScribeMark").accessibilityLabel("Scribe")
+            }
         }
     }
 }

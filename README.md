@@ -59,6 +59,8 @@ cd Packages/ScribeKit && swift run scribe ui demo
 
 The smaller commands (`launch`, `menu`, `press`, `type`, `wait`, `read`, `tree`, `screenshot`, `quit`) can be chained for other flows. Queries match accessibility identifiers such as `notes.add`, titles or labels; `scribe ui tree` lists them.
 
+The app icon (`App/AppIcon.icon`, an Icon Composer document) and the menu bar mark (`ScribeMark` in `App/Assets.xcassets`) are generated from one drawing. After changing the mark, run `swift scripts/make-icons.swift`.
+
 Debug builds are signed ad hoc. That means macOS may ask again for permissions and Keychain access after rebuilds.
 
 ### Testing process taps (do this early)

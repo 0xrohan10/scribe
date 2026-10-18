@@ -86,8 +86,10 @@ private struct Greeting: View {
 
     var body: some View {
         VStack(spacing: 18) {
-            Image(systemName: "waveform")
-                .font(.system(size: 30, weight: .light))
+            Image("ScribeMark")
+                .resizable()
+                .frame(width: 34, height: 34)
+                .accessibilityHidden(true)
                 .foregroundStyle(Theme.secondary)
             Text(greeting).font(Theme.serif(34))
             Text("Record a meeting and Scribe keeps the transcript, your notes and a summary, all on this Mac.")
