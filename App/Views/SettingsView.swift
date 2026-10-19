@@ -302,12 +302,12 @@ private struct AboutSection: View {
 
     var body: some View {
         Section("About") {
+            // ScribeVersion and ScribeGitSHA are stamped into the built Info.plist by scripts/stamp-version.sh.
             LabeledContent("Version") {
-                Text("\(info["CFBundleShortVersionString"] as? String ?? "?") (\(info["CFBundleVersion"] as? String ?? "?"))")
+                Text("\(info["ScribeVersion"] as? String ?? "?") (\(info["CFBundleVersion"] as? String ?? "?"))")
                     .textSelection(.enabled)
             }
             LabeledContent("Commit") {
-                // Stamped into the built Info.plist by the "Stamp git SHA" build phase.
                 Text(info["ScribeGitSHA"] as? String ?? "unknown")
                     .monospaced()
                     .textSelection(.enabled)

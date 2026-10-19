@@ -32,8 +32,9 @@ targets:
       path: App/Info.plist
       properties:
         CFBundleDisplayName: Scribe
-        CFBundleShortVersionString: "0.1.0"
-        CFBundleVersion: "1"
+        # Placeholders: scripts/stamp-version.sh sets both from git tags at build time.
+        CFBundleShortVersionString: "0.0.0"
+        CFBundleVersion: "0"
         LSUIElement: true
         LSApplicationCategoryType: public.app-category.productivity
         NSMicrophoneUsageDescription: Scribe records your microphone to transcribe what you say in meetings.
@@ -59,13 +60,9 @@ targets:
           CODE_SIGN_IDENTITY: Developer ID Application
           OTHER_CODE_SIGN_FLAGS: --timestamp
     postBuildScripts:
-      - name: Stamp git SHA
+      - name: Stamp version
         basedOnDependencyAnalysis: false
-        script: |
-          SHA=$(git -C "$SRCROOT" rev-parse --short HEAD 2>/dev/null || echo unknown)
-          PLIST="$TARGET_BUILD_DIR/$INFOPLIST_PATH"
-          /usr/libexec/PlistBuddy -c "Delete :ScribeGitSHA" "$PLIST" 2>/dev/null || true
-          /usr/libexec/PlistBuddy -c "Add :ScribeGitSHA string $SHA" "$PLIST"
+        script: '"$SRCROOT/scripts/stamp-version.sh"'
     dependencies:
       - package: ScribeKit
         product: Core

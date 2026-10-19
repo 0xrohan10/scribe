@@ -14,6 +14,9 @@ PROFILE="${NOTARY_PROFILE:-scribe-notary}"
 OUT="build/release"
 ARCHIVE="$OUT/Scribe.xcarchive"
 
+git describe --tags --exact-match --match 'v[0-9]*.[0-9]*.[0-9]*' >/dev/null 2>&1 \
+    || { echo "✗ HEAD isn't a version tag. Run scripts/bump.sh patch|minor|major first." >&2; exit 1; }
+
 rm -rf "$OUT"
 mkdir -p "$OUT"
 

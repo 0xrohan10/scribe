@@ -63,7 +63,13 @@ The app icon (`App/AppIcon.icon`, an Icon Composer document) and the menu bar ma
 
 Debug builds sign with your Apple Development certificate (Xcode ▸ Settings ▸ Accounts creates one), so macOS keeps their permissions and Keychain access across rebuilds.
 
-Settings ▸ About shows the version and the commit the app was built from. The version and build number are `CFBundleShortVersionString` and `CFBundleVersion` in `project.yml`. The commit comes from the "Stamp git SHA" build phase, which writes `git rev-parse --short HEAD` into the built app's Info.plist as `ScribeGitSHA` on every build. Without git, it reads "unknown".
+Settings ▸ About shows the version, build number and commit the app was built from. All three come from git: on every build, the "Stamp version" build phase (`scripts/stamp-version.sh`) writes them into the built app's Info.plist.
+
+- **Version.** Semver from the latest `vX.Y.Z` tag. A build from a commit after the tag is the next patch's prerelease: three commits past `v0.2.0` builds as `0.2.1-dev.3`. `CFBundleShortVersionString` is the tag's plain `X.Y.Z`, because macOS only accepts numbers there. The full version is in `ScribeVersion`.
+- **Build number.** `CFBundleVersion` is the commit count (`git rev-list --count HEAD`), so it rises with every commit on `main`.
+- **Commit.** The short SHA, in `ScribeGitSHA`.
+
+The values in `project.yml` are placeholders.
 
 ### Testing process taps (do this early)
 
@@ -89,7 +95,13 @@ Leave out `--bundle` to tap all apps, or use `--bundle us.zoom.xos` for Zoom. Th
    xcrun notarytool store-credentials scribe-notary --apple-id you@example.com --team-id TEAMID
    ```
 
-3. Build, notarize and staple:
+3. Tag the release. Pick `patch`, `minor` or `major` by semver. The script tags `HEAD` with the next version and prints the push command:
+
+   ```bash
+   scripts/bump.sh minor
+   ```
+
+4. Build, notarize and staple. This refuses to run unless `HEAD` is a version tag:
 
    ```bash
    scripts/release.sh

@@ -169,7 +169,7 @@
 				A3C55BD5E9BF3DB4B77D78FC /* Sources */,
 				CB65F06A27CFA292E58C59C8 /* Resources */,
 				32C8E4CDC3056D38CC51E678 /* Frameworks */,
-				53E9A54A731BF2ABA7A4EB3C /* Stamp git SHA */,
+				85A74DF78C0E8EE9FEF0B1CE /* Stamp version */,
 			);
 			buildRules = (
 			);
@@ -242,7 +242,7 @@
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXShellScriptBuildPhase section */
-		53E9A54A731BF2ABA7A4EB3C /* Stamp git SHA */ = {
+		85A74DF78C0E8EE9FEF0B1CE /* Stamp version */ = {
 			isa = PBXShellScriptBuildPhase;
 			alwaysOutOfDate = 1;
 			buildActionMask = 2147483647;
@@ -252,14 +252,14 @@
 			);
 			inputPaths = (
 			);
-			name = "Stamp git SHA";
+			name = "Stamp version";
 			outputFileListPaths = (
 			);
 			outputPaths = (
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
-			shellScript = "SHA=$(git -C \"$SRCROOT\" rev-parse --short HEAD 2>/dev/null || echo unknown)\nPLIST=\"$TARGET_BUILD_DIR/$INFOPLIST_PATH\"\n/usr/libexec/PlistBuddy -c \"Delete :ScribeGitSHA\" \"$PLIST\" 2>/dev/null || true\n/usr/libexec/PlistBuddy -c \"Add :ScribeGitSHA string $SHA\" \"$PLIST\"\n";
+			shellScript = "\"$SRCROOT/scripts/stamp-version.sh\"";
 		};
 /* End PBXShellScriptBuildPhase section */
 
