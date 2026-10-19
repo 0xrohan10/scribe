@@ -29,6 +29,12 @@ public protocol TranscriptionProvider: Sendable {
     var id: String { get }
     /// `audio` carries a single source; segments should take their speaker from `chunk.source.speaker`.
     func transcribe(_ audio: AsyncStream<AudioChunk>) -> AsyncThrowingStream<TranscriptSegment, Error>
+    /// Loads whatever `transcribe` needs (e.g. a local model) so the first meeting doesn't wait on it.
+    func prepare() async throws
+}
+
+extension TranscriptionProvider {
+    public func prepare() async throws {}
 }
 
 /// The live transcript: segments ordered by start time, partials replaced in place by id.

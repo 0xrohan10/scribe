@@ -15,8 +15,12 @@ public struct WhisperKitProvider: TranscriptionProvider {
         self.language = language
     }
 
-    /// The largest model WhisperKit recommends for this Mac.
-    public static var defaultModel: String { WhisperKit.recommendedModels().default }
+    /// Large-v3 turbo, quantized: near large-v3 accuracy at a fraction of the size, fast enough to keep up live.
+    public static let defaultModel = "openai_whisper-large-v3-v20240930_turbo_632MB"
+
+    public func prepare() async throws {
+        _ = try await WhisperModels.shared.load(model)
+    }
 
     public func transcribe(_ audio: AsyncStream<Core.AudioChunk>) -> AsyncThrowingStream<TranscriptSegment, Error> {
         let (model, language) = (model, language)
@@ -31,16 +35,21 @@ public struct WhisperKitProvider: TranscriptionProvider {
                     var segmenter = UtteranceSegmenter()
                     var speaker = Speaker.them
                     var segmentID = UUID()
+                    // The last final line, so each utterance is decoded with what was just said as context.
+                    var previous = ""
 
                     func emit(_ utterance: UtteranceSegmenter.Utterance) async throws {
-                        let text = try await whisper.transcribe(utterance.samples, options: options)
+                        let text = try await whisper.transcribe(utterance.samples, options: options, prompt: previous)
                         if !text.isEmpty {
                             continuation.yield(
                                 TranscriptSegment(
                                     id: segmentID, speaker: speaker, text: text,
                                     start: utterance.start, end: utterance.end, isFinal: utterance.isFinal))
                         }
-                        if utterance.isFinal { segmentID = UUID() }
+                        if utterance.isFinal {
+                            segmentID = UUID()
+                            if !text.isEmpty { previous = text }
+                        }
                     }
 
                     for await chunk in audio {
@@ -71,10 +80,15 @@ struct UtteranceSegmenter {
     }
 
     var sampleRate = Double(WhisperKit.sampleRate)
-    /// RMS above this counts as speech.
-    var speechThreshold: Float = 0.01
+    /// Speech is RMS this many times above the noise floor, clamped to `speechRMS`.
+    var speechRatio: Float = 3
+    var speechRMS: ClosedRange<Float> = 0.003...0.03
+    /// The noise floor is the quietest chunk in this window.
+    var floorWindow: TimeInterval = 10
     /// Trailing silence that ends an utterance.
-    var endSilence: TimeInterval = 0.8
+    var endSilence: TimeInterval = 1
+    /// Shorter utterances keep listening through pauses; Whisper does badly on 1 s clips with no context.
+    var minDuration: TimeInterval = 3
     var partialInterval: TimeInterval = 1
     /// Whisper's window is 30 s; cut before it so nothing is dropped.
     var maxDuration: TimeInterval = 25
@@ -82,6 +96,8 @@ struct UtteranceSegmenter {
     var preRoll: TimeInterval = 0.3
 
     private var samples: [Float] = []
+    /// Recent chunk levels and sizes, for the noise floor.
+    private var levels: [(rms: Float, count: Int)] = []
     private var start: TimeInterval = 0
     private var hasSpeech = false
     // Counted in samples so repeated chunk durations don't drift below the thresholds.
@@ -92,7 +108,7 @@ struct UtteranceSegmenter {
         guard !chunk.isEmpty else { return nil }
         if samples.isEmpty { start = timestamp }
         samples += chunk
-        let isSpeech = rms(chunk) >= speechThreshold
+        let isSpeech = isSpeech(chunk)
 
         guard hasSpeech || isSpeech else {
             // Still waiting for speech: keep only the pre-roll.
@@ -107,7 +123,8 @@ struct UtteranceSegmenter {
         silence = isSpeech ? 0 : silence + chunk.count
         sinceDecode += chunk.count
 
-        if silence >= sampleCount(endSilence) || samples.count >= sampleCount(maxDuration) { return flush() }
+        let endsOnPause = silence >= sampleCount(endSilence) && samples.count >= sampleCount(minDuration)
+        if endsOnPause || samples.count >= sampleCount(maxDuration) { return flush() }
         if isSpeech, sinceDecode >= sampleCount(partialInterval) {
             sinceDecode = 0
             return utterance(isFinal: false)
@@ -128,6 +145,18 @@ struct UtteranceSegmenter {
 
     private func utterance(isFinal: Bool) -> Utterance {
         Utterance(samples: samples, start: start, end: start + Double(samples.count) / sampleRate, isFinal: isFinal)
+    }
+
+    /// The upper clamp means a stream that opens mid-sentence, with no quiet chunk yet, still counts as speech.
+    private mutating func isSpeech(_ chunk: [Float]) -> Bool {
+        let level = rms(chunk)
+        levels.append((level, chunk.count))
+        var total = levels.reduce(0) { $0 + $1.count }
+        while total - levels[0].count >= sampleCount(floorWindow) {
+            total -= levels.removeFirst().count
+        }
+        let floor = levels.map(\.rms).min()!
+        return level >= min(max(floor * speechRatio, speechRMS.lowerBound), speechRMS.upperBound)
     }
 
     private func sampleCount(_ seconds: TimeInterval) -> Int { Int((seconds * sampleRate).rounded()) }
@@ -160,16 +189,24 @@ private actor WhisperModels {
     }
 }
 
-private struct LoadedWhisper: @unchecked Sendable {
+struct LoadedWhisper: @unchecked Sendable {
     let kit: WhisperKit
 
-    func transcribe(_ samples: [Float], options: DecodingOptions) async throws -> String {
-        try await kit.transcribe(audioArray: samples, decodeOptions: options)
-            .flatMap(\.segments)
-            // Whisper invents text ("Thank you.") over near-silence; drop segments it thinks aren't speech.
-            .filter { $0.noSpeechProb < 0.6 }
-            .map(\.text)
-            .joined()
+    func transcribe(_ samples: [Float], options: DecodingOptions, prompt: String) async throws -> String {
+        var options = options
+        if !prompt.isEmpty, let tokenizer = kit.tokenizer {
+            // Whisper allows about 224 prompt tokens; the tail of the last line is the useful part.
+            options.promptTokens = Array(
+                tokenizer.encode(text: " " + prompt).filter { $0 < tokenizer.specialTokens.specialTokenBegin }.suffix(200))
+        }
+        let text = try await kit.transcribe(audioArray: samples, decodeOptions: options).map(\.text).joined()
+        return Self.removingTags(text)
+    }
+
+    /// Drops the non-speech tags Whisper emits, like "[BLANK_AUDIO]", "[Music]" or "( in foreign language )".
+    static func removingTags(_ text: String) -> String {
+        text.replacing(/\[[^\]]*\]|\([^)]*\)/, with: "")
+            .replacing(/\s{2,}/, with: " ")
             .trimmingCharacters(in: .whitespacesAndNewlines)
     }
 }

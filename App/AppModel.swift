@@ -17,11 +17,24 @@ enum Route: Hashable {
     case settings
 }
 
+/// Whether the selected transcriber can record yet. Local models download and compile before their first meeting.
+enum TranscriberStatus: Equatable {
+    case ready
+    case preparing
+    case failed(String)
+}
+
 /// Composition root: owns the stores, wires domains together and drives the meeting lifecycle.
 @MainActor @Observable
 final class AppModel {
     var settings: AppSettings {
-        didSet { settingsStore.save(settings) }
+        didSet {
+            settingsStore.save(settings)
+            if settings.transcriptionProviderID != oldValue.transcriptionProviderID || settings.models != oldValue.models {
+                // The model field saves per keystroke; wait for typing to stop before loading a model.
+                prepareTranscriber(after: .seconds(1))
+            }
+        }
     }
     private(set) var detectedMeeting: DetectedMeeting?
     private(set) var current: MeetingViewModel?
@@ -30,6 +43,7 @@ final class AppModel {
     var route: Route = .library
     private(set) var recentMeetings: [Meeting] = []
     var lastError: String?
+    private(set) var transcriberStatus = TranscriberStatus.ready
 
     let secrets: any SecretStore
     let library: LibraryModel
@@ -44,6 +58,7 @@ final class AppModel {
     @ObservationIgnored private var makeSources: @Sendable (SystemAudioScope) -> [any AudioSource] = { [MicrophoneSource(), SystemAudioSource(scope: $0)] }
     @ObservationIgnored private var requestMicrophone: @Sendable () async -> Bool = { await MicrophoneSource.requestPermission() }
     @ObservationIgnored private var llmOverride: (any LLMProvider)?
+    @ObservationIgnored private var preparing: Task<Void, Never>?
 
     var isRecording: Bool { current?.isRecording == true }
     var isCapturing: Bool { current?.isCapturing == true }
@@ -67,6 +82,7 @@ final class AppModel {
         prompter.setUp()
         Task { await runDetection() }
         Task { await refreshRecent() }
+        prepareTranscriber()
     }
 
     #if DEBUG
@@ -128,6 +144,10 @@ final class AppModel {
             askToChooseTranscriber()
             return
         }
+        guard transcriberStatus == .ready else {
+            explainTranscriberNotReady()
+            return
+        }
         guard let current, current.isCapturing else {
             beginMeeting(from: detected, transcriberID: transcriberID)
             return
@@ -152,6 +172,25 @@ final class AppModel {
         alert.addButton(withTitle: "Stop and Start New")
         alert.addButton(withTitle: "Keep Recording")
         return alert.runModal() == .alertFirstButtonReturn
+    }
+
+    private func explainTranscriberNotReady() {
+        NSApp.activate()
+        let alert = NSAlert()
+        switch transcriberStatus {
+        case .ready: return
+        case .preparing:
+            alert.messageText = "The transcription model is still loading"
+            alert.informativeText = "Scribe is downloading and preparing it so nothing you say is lost. Try again in a minute."
+            alert.addButton(withTitle: "OK")
+            alert.runModal()
+        case .failed(let message):
+            alert.messageText = "The transcription model couldn't load"
+            alert.informativeText = message
+            alert.addButton(withTitle: "Retry")
+            alert.addButton(withTitle: "Cancel")
+            if alert.runModal() == .alertFirstButtonReturn { prepareTranscriber() }
+        }
     }
 
     private func askToChooseTranscriber() {
@@ -280,6 +319,27 @@ final class AppModel {
     private func makeProvider<P>(_ registry: ProviderRegistry<P>, id: String) throws -> P {
         guard let descriptor = registry.descriptor(id: id) else { throw ProviderError.unknownProvider(id) }
         return try registry.make(id: id, config: settings.config(for: descriptor, secrets: secrets))
+    }
+
+    /// Loads a local model in the background. Recording waits for it, since audio captured before it's ready would be lost.
+    private func prepareTranscriber(after delay: Duration = .zero) {
+        preparing?.cancel()
+        guard let id = settings.transcriptionProviderID, let transcriber = try? makeProvider(Providers.transcription, id: id) else {
+            transcriberStatus = .ready
+            return
+        }
+        transcriberStatus = .preparing
+        preparing = Task {
+            do {
+                try await Task.sleep(for: delay)
+                try await transcriber.prepare()
+                guard !Task.isCancelled else { return }
+                transcriberStatus = .ready
+            } catch {
+                guard !Task.isCancelled else { return }
+                transcriberStatus = .failed(error.localizedDescription)
+            }
+        }
     }
 
     private func makeLLM() -> (any LLMProvider)? {

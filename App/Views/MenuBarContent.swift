@@ -11,11 +11,17 @@ struct MenuBarContent: View {
             Button("Stop Recording") { Task { await current.stop() } }
                 .keyboardShortcut("s")
         } else {
-            if let detected = model.detectedMeeting {
-                Button("Record \(detected.app.displayName) Meeting") { model.startMeeting(from: detected) }
+            if model.transcriberStatus == .preparing {
+                Text("Preparing transcription model…")
             }
-            Button("Start Recording") { model.startMeeting() }
-                .keyboardShortcut("r")
+            Group {
+                if let detected = model.detectedMeeting {
+                    Button("Record \(detected.app.displayName) Meeting") { model.startMeeting(from: detected) }
+                }
+                Button("Start Recording") { model.startMeeting() }
+                    .keyboardShortcut("r")
+            }
+            .disabled(model.transcriberStatus == .preparing)
             if let current = model.current {
                 Button("Show Last Meeting") { model.openPast(current.meeting) }
             }

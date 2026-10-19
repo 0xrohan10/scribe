@@ -31,10 +31,43 @@ import Testing
             t += 0.1
         }
         #expect(out.map(\.isFinal) == [false, false, true])
-        // Leading silence is trimmed to the 0.3 s pre-roll; the final ends after 0.8 s of trailing silence.
+        // Leading silence is trimmed to the 0.3 s pre-roll; the final ends after 1 s of trailing silence.
         #expect(abs(out[2].start - 5.7) < 0.001)
-        #expect(abs(out[2].end - 9.3) < 0.001)
+        #expect(abs(out[2].end - 9.5) < 0.001)
         #expect(segmenter.flush() == nil)
+    }
+
+    @Test func segmenterKeepsShortUtterancesOpenThroughPauses() {
+        var segmenter = UtteranceSegmenter()
+        let speech = [Float](repeating: 0.1, count: 1600), silence = [Float](repeating: 0, count: 1600)
+        // 0.5 s of speech, then a 1.2 s pause: too short to stand alone, so it waits for more.
+        for (i, chunk) in (Array(repeating: speech, count: 5) + Array(repeating: silence, count: 12)).enumerated() {
+            #expect(segmenter.append(chunk, at: Double(i) / 10)?.isFinal != true)
+        }
+        #expect(segmenter.flush()?.isFinal == true)
+    }
+
+    @Test func segmenterHearsSpeechAboveSteadyNoise() {
+        var segmenter = UtteranceSegmenter()
+        let noise = [Float](repeating: 0.02, count: 1600), speech = [Float](repeating: 0.1, count: 1600)
+        var t = 0.0
+        for _ in 0..<50 {
+            // A fixed 0.01 threshold would call this noise speech; the floor learns it isn't.
+            #expect(segmenter.append(noise, at: t) == nil)
+            t += 0.1
+        }
+        var out: [UtteranceSegmenter.Utterance] = []
+        for chunk in Array(repeating: speech, count: 20) + Array(repeating: noise, count: 20) {
+            if let u = segmenter.append(chunk, at: t) { out.append(u) }
+            t += 0.1
+        }
+        #expect(out.last?.isFinal == true)
+    }
+
+    @Test func removesWhisperTags() {
+        #expect(LoadedWhisper.removingTags("[BLANK_AUDIO]") == "")
+        #expect(LoadedWhisper.removingTags("( in foreign language )") == "")
+        #expect(LoadedWhisper.removingTags("So [Music] that's it (laughs).") == "So that's it .")
     }
 
     @Test func segmenterCutsLongSpeechAndFlushesTail() {
