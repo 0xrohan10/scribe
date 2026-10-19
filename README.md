@@ -95,6 +95,54 @@ Leave out `--bundle` to tap all apps, or use `--bundle us.zoom.xos` for Zoom. Th
 
 The app is unsandboxed, uses the hardened runtime with `com.apple.security.device.audio-input`, and is signed with Developer ID.
 
+### Installing a local build without Developer ID
+
+Until the Developer ID certificate exists, `scripts/release.sh` can't sign. To put a Release build in `/Applications` on your own Mac, build it unsigned and sign it with your Apple Development certificate. That's the same certificate Debug builds use, so macOS keeps Scribe's permissions and Keychain access. From the repo root:
+
+1. Build Release without signing:
+
+   ```bash
+   xcodebuild -project Scribe.xcodeproj -scheme Scribe -configuration Release -destination 'generic/platform=macOS' -derivedDataPath build/ReleaseCheck build CODE_SIGNING_ALLOWED=NO
+   ```
+
+2. Copy it into a new folder named after the commit:
+
+   ```bash
+   ditto build/ReleaseCheck/Build/Products/Release/Scribe.app build/release-$(git rev-parse --short HEAD)/Scribe.app
+   ```
+
+3. Sign it with your Apple Development certificate (`security find-identity -v -p codesigning` lists it):
+
+   ```bash
+   codesign --force --deep --options runtime --timestamp=none --entitlements App/Scribe.entitlements --sign "Apple Development" build/release-$(git rev-parse --short HEAD)/Scribe.app
+   ```
+
+4. Quit the running Scribe:
+
+   ```bash
+   osascript -e 'quit app "Scribe"'
+   ```
+
+5. Delete the old copy:
+
+   ```bash
+   rm -rf /Applications/Scribe.app
+   ```
+
+6. Copy in the new one:
+
+   ```bash
+   ditto build/release-$(git rev-parse --short HEAD)/Scribe.app /Applications/Scribe.app
+   ```
+
+7. Open it:
+
+   ```bash
+   open /Applications/Scribe.app
+   ```
+
+This build isn't notarized, so it's only for your own Mac. Gatekeeper blocks it anywhere else.
+
 ## Permissions
 
 - **Microphone.** `NSMicrophoneUsageDescription`. Scribe asks when the first recording starts.
