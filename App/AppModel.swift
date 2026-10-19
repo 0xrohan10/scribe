@@ -57,6 +57,7 @@ final class AppModel {
     /// Real hardware and providers, swapped for fakes in UI-testing mode.
     @ObservationIgnored private var makeSources: @Sendable (SystemAudioScope) -> [any AudioSource] = { [MicrophoneSource(), SystemAudioSource(scope: $0)] }
     @ObservationIgnored private var requestMicrophone: @Sendable () async -> Bool = { await MicrophoneSource.requestPermission() }
+    @ObservationIgnored private var requestSystemAudio: @Sendable () async -> Bool = { await SystemAudioPermission.request() }
     @ObservationIgnored private var llmOverride: (any LLMProvider)?
     @ObservationIgnored private var preparing: Task<Void, Never>?
 
@@ -110,6 +111,7 @@ final class AppModel {
         self.init(preview: settings, secrets: secrets, database: database)
         makeSources = sources
         requestMicrophone = { true }
+        requestSystemAudio = { true }
         llmOverride = llm
         Task { await refreshRecent() }
     }
@@ -228,6 +230,9 @@ final class AppModel {
                     vm.warnings.append("Microphone access is off. Enable it in System Settings ▸ Privacy & Security ▸ Microphone.")
                     await vm.stopCapture()  // Cancels the unstarted session so it doesn't block the next one.
                     return
+                }
+                if await !requestSystemAudio() {
+                    vm.warnings.append("System audio access is off, so only your side will be transcribed. Enable it in System Settings ▸ Privacy & Security ▸ Screen & System Audio Recording.")
                 }
                 await vm.start()
                 await refreshRecent()

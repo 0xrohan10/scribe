@@ -8,7 +8,7 @@ import Foundation
 /// Pipeline: `CATapDescription` → `AudioHardwareCreateProcessTap` → aggregate device containing the tap
 /// (with the default output as main sub-device for clocking) → IOProc → `CaptureSink`.
 /// The first tap creation triggers the "System Audio Recording" TCC prompt (`NSAudioCaptureUsageDescription`).
-/// If the user denies it the tap still runs but delivers silence, so check levels (see `scribe-tapcheck`).
+/// If the user denies it the tap still runs but delivers silence; `SystemAudioPermission` detects that.
 public actor SystemAudioSource: AudioSource {
     public nonisolated let source = AudioChunk.Source.system
     public nonisolated let scope: SystemAudioScope

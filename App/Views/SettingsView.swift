@@ -1,4 +1,5 @@
 import AVFAudio
+import Capture
 import Core
 import Detection
 import Intelligence
@@ -109,6 +110,7 @@ private struct ProviderFields: View {
 private struct PermissionsSection: View {
     @State private var accessibility = Accessibility.isTrusted
     @State private var mic = AVAudioApplication.shared.recordPermission
+    @State private var systemAudio = SystemAudioPermission.status
 
     var body: some View {
         Section {
@@ -120,7 +122,11 @@ private struct PermissionsSection: View {
                 }
             }
             LabeledContent("System audio") {
-                Button("Open Settings") { open("Privacy_AudioCapture") }
+                switch systemAudio {
+                case .granted: Text("Allowed").foregroundStyle(.green)
+                case .denied: Button("Open Settings") { open("Privacy_AudioCapture") }
+                case .unknown: Button("Allow") { Task { _ = await SystemAudioPermission.request(); systemAudio = SystemAudioPermission.status } }
+                }
             }
             LabeledContent("Accessibility (Teams & Meet detection)") {
                 if accessibility {
@@ -132,11 +138,12 @@ private struct PermissionsSection: View {
         } header: {
             Text("Permissions")
         } footer: {
-            Text("System audio permission is requested the first time you record. If the other side is missing from transcripts, check it's allowed.")
+            Text("Without system audio, transcripts only include your side of the meeting.")
         }
         .onReceive(Timer.publish(every: 2, on: .main, in: .common).autoconnect()) { _ in
             accessibility = Accessibility.isTrusted
             mic = AVAudioApplication.shared.recordPermission
+            systemAudio = SystemAudioPermission.status
         }
     }
 
