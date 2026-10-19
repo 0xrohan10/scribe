@@ -49,16 +49,20 @@ struct TranscriptView: View {
                 if let target { withAnimation { proxy.scrollTo(target.id, anchor: .center) } }
             }
             .overlay(alignment: .bottomTrailing) {
-                if !followLive, vm.isRecording {
-                    Button("Follow live", systemImage: "arrow.down") {
-                        followLive = true
-                        vm.focusedNote = nil
-                        proxy.scrollTo("bottom", anchor: .bottom)
+                // Animated here rather than on the scroll view, so jumping back to live stays instant.
+                ZStack {
+                    if !followLive, vm.isRecording {
+                        Button("Follow live", systemImage: "arrow.down") {
+                            followLive = true
+                            vm.focusedNote = nil
+                            proxy.scrollTo("bottom", anchor: .bottom)
+                        }
+                        .buttonStyle(QuietButtonStyle())
+                        .padding(12)
+                        .transition(.rise)
                     }
-                    .buttonStyle(QuietButtonStyle())
-                    .padding(12)
-                    .transition(.rise)
                 }
+                .motion(Motion.quick, value: !followLive && vm.isRecording)
             }
         }
     }

@@ -83,6 +83,8 @@ struct LibraryView: View {
 /// The empty library: a calm welcome and one obvious thing to do.
 private struct Greeting: View {
     let app: AppModel
+    /// Drives the one-time entrance: the mark, greeting, pitch and button arrive one after another.
+    @State private var appeared = false
 
     var body: some View {
         VStack(spacing: 18) {
@@ -91,18 +93,23 @@ private struct Greeting: View {
                 .frame(width: 34, height: 34)
                 .accessibilityHidden(true)
                 .foregroundStyle(Theme.secondary)
+                .rise(isShown: appeared)
             Text(greeting).font(Theme.serif(34))
+                .rise(isShown: appeared, delay: 0.06)
             Text("Record a meeting and Scribe keeps the transcript, your notes and a summary, all on this Mac.")
                 .font(.system(size: 14))
                 .foregroundStyle(Theme.secondary)
                 .multilineTextAlignment(.center)
                 .frame(maxWidth: 380)
+                .rise(isShown: appeared, delay: 0.12)
             Button("Start recording", systemImage: "record.circle") { app.startMeeting() }
                 .buttonStyle(CapsuleButtonStyle())
                 .padding(.top, 6)
+                .rise(isShown: appeared, delay: 0.18)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .padding(.bottom, 60)
+        .onAppear { appeared = true }
     }
 
     private var greeting: String {

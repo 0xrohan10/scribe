@@ -120,6 +120,8 @@ private struct NoteRow: View {
         .background(vm.focusedNote?.id == note.id ? Theme.highlight.opacity(0.08) : isHovered ? Theme.hover.opacity(0.5) : .clear, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
         .onHover { isHovered = $0 }
         .motion(Motion.press, value: isHovered)
+        // In step with the transcript's highlight of the same moment.
+        .motion(value: vm.focusedNote?.id == note.id)
         .contextMenu {
             Button("Delete", role: .destructive) { Task { await vm.delete(note) } }
         }

@@ -6,6 +6,9 @@ struct SummaryView: View {
     let summary: MeetingSummary?
     let isLoading: Bool
     @State private var copied = false
+    /// False while summarizing, then true once the summary is on screen, so its sections stagger in as it arrives.
+    /// A summary that's already there when the view opens just appears.
+    @State private var revealed = true
 
     var body: some View {
         ScrollView {
@@ -28,26 +31,36 @@ struct SummaryView: View {
                             .contentTransition(.symbolEffect(.replace))
                             .motion(Motion.quick, value: copied)
                         }
+                        .rise(isShown: revealed)
                         Text(summary.overview)
                             .font(.system(size: 15))
                             .lineSpacing(5)
                             .accessibilityIdentifier("summary.overview")
                             .padding(.top, -12)
+                            .rise(isShown: revealed, delay: 0.05)
                         Section("Flagged", items: summary.flagged, icon: "star.fill", tint: Theme.flag)
+                            .rise(isShown: revealed, delay: 0.1)
                         Section("Decisions", items: summary.decisions, icon: "checkmark.seal")
+                            .rise(isShown: revealed, delay: 0.15)
                         Section(
                             "Action items",
                             items: summary.actionItems.map { item in
                                 [item.owner.map { "\($0): " }, item.task, item.due.map { " (due \($0))" }].compactMap { $0 }.joined()
                             },
-                            icon: "checklist")
+                            icon: "checklist"
+                        )
+                        .rise(isShown: revealed, delay: 0.2)
                         Section("Open questions", items: summary.openQuestions, icon: "questionmark.circle")
+                            .rise(isShown: revealed, delay: 0.25)
                     }
                     .textSelection(.enabled)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .accessibilityElement(children: .contain)
                     .accessibilityIdentifier("summary")
-                    .transition(.rise)
+                    // While the sections stagger in, the column itself only fades.
+                    .transition(revealed ? .rise : .opacity)
+                    // Once the sections are on screen, so they animate from hidden.
+                    .onAppear { revealed = true }
                 } else {
                     VStack(spacing: 12) {
                         if isLoading { ProgressView().controlSize(.small) }
@@ -63,6 +76,9 @@ struct SummaryView: View {
             .padding(.vertical, 24)
             .frame(maxWidth: .infinity)
             .motion(value: isLoading || summary == nil)
+        }
+        .onChange(of: isLoading, initial: true) { _, loading in
+            if loading { revealed = false }
         }
     }
 }

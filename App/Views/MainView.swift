@@ -54,6 +54,8 @@ struct Sidebar: View {
     @State private var folderDraft = ""
     @State private var renaming: Folder?
     @State private var renameDraft = ""
+    /// The row a dragged meeting is over.
+    @State private var dropTarget: LibraryFilter?
     @FocusState private var namingFocused: Bool
 
     var body: some View {
@@ -71,7 +73,7 @@ struct Sidebar: View {
                     row("Meetings", icon: "tray.full", count: library.entries.count, filter: .all)
                         .accessibilityIdentifier("sidebar.all")
                     row("Unfiled", icon: "tray", filter: .unfiled)
-                        .dropDestination(for: String.self) { ids, _ in file(ids, into: nil) }
+                        .dropDestination(for: String.self, action: { ids, _ in file(ids, into: nil) }, isTargeted: targeting(.unfiled))
 
                     SectionHeader(title: "Folders") {
                         Button("New Folder", systemImage: "plus") {
@@ -84,7 +86,7 @@ struct Sidebar: View {
                     }
                     ForEach(library.folders) { folder in
                         row(folder.name, icon: "folder", count: library.count(in: folder), filter: .folder(folder.id))
-                            .dropDestination(for: String.self) { ids, _ in file(ids, into: folder.id) }
+                            .dropDestination(for: String.self, action: { ids, _ in file(ids, into: folder.id) }, isTargeted: targeting(.folder(folder.id)))
                             .contextMenu {
                                 Button("Rename…") {
                                     renameDraft = folder.name
@@ -132,45 +134,47 @@ struct Sidebar: View {
         }
     }
 
-    @ViewBuilder
     private var recordButton: some View {
-        if let current = app.current, current.isRecording {
-            Button { app.showCurrentMeeting() } label: {
-                HStack(spacing: 10) {
-                    RecordingDot()
-                    Text("Recording").font(.system(size: 13, weight: .medium))
-                    Spacer()
-                    TimelineView(.periodic(from: .now, by: 1)) { _ in
-                        Text(current.clock.now.clockString).font(.system(size: 12).monospacedDigit()).foregroundStyle(Theme.secondary)
+        ZStack {
+            if let current = app.current, current.isRecording {
+                Button { app.showCurrentMeeting() } label: {
+                    HStack(spacing: 10) {
+                        RecordingDot()
+                        Text("Recording").font(.system(size: 13, weight: .medium))
+                        Spacer()
+                        TimelineView(.periodic(from: .now, by: 1)) { _ in
+                            Text(current.clock.now.clockString).font(.system(size: 12).monospacedDigit()).foregroundStyle(Theme.secondary)
+                        }
                     }
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 8)
+                    .background(Theme.recording.opacity(0.1), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                    .contentShape(Rectangle())
                 }
-                .padding(.horizontal, 10)
-                .padding(.vertical, 8)
-                .background(Theme.recording.opacity(0.1), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-                .contentShape(Rectangle())
-            }
-            .buttonStyle(PressableStyle())
-            .accessibilityIdentifier("sidebar.recording")
-            .transition(.rise)
-        } else {
-            Button { app.startMeeting() } label: {
-                HStack(spacing: 8) {
-                    Image(systemName: "record.circle").frame(width: 18)
-                    Text("New recording")
-                    Spacer()
-                    Image(systemName: "square.and.pencil").foregroundStyle(Theme.tertiary)
+                .buttonStyle(PressableStyle())
+                .accessibilityIdentifier("sidebar.recording")
+                .transition(.rise)
+            } else {
+                Button { app.startMeeting() } label: {
+                    HStack(spacing: 8) {
+                        Image(systemName: "record.circle").frame(width: 18)
+                        Text("New recording")
+                        Spacer()
+                        Image(systemName: "square.and.pencil").foregroundStyle(Theme.tertiary)
+                    }
+                    .font(.system(size: 13, weight: .medium))
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 8)
+                    .background(Theme.surface, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                    .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(Theme.border))
+                    .contentShape(Rectangle())
                 }
-                .font(.system(size: 13, weight: .medium))
-                .padding(.horizontal, 10)
-                .padding(.vertical, 7)
-                .background(Theme.surface, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-                .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(Theme.border))
-                .contentShape(Rectangle())
+                .buttonStyle(PressableStyle())
+                .accessibilityIdentifier("sidebar.newRecording")
+                .transition(.rise)
             }
-            .buttonStyle(PressableStyle())
-            .accessibilityIdentifier("sidebar.newRecording")
-            .transition(.rise)
         }
+        .motion(value: app.current?.isRecording == true)
     }
 
     private var folderNameField: some View {
@@ -196,7 +200,10 @@ struct Sidebar: View {
     }
 
     private func row(_ title: String, icon: String, count: Int? = nil, filter: LibraryFilter) -> some View {
-        SidebarRow(title: title, icon: icon, count: count, isSelected: app.route == .library && library.selection == filter) {
+        SidebarRow(
+            title: title, icon: icon, count: count, isSelected: app.route == .library && library.selection == filter,
+            isTargeted: dropTarget == filter
+        ) {
             app.showLibrary(filter)
         }
     }
@@ -216,6 +223,13 @@ struct Sidebar: View {
         Task { for id in meetingIDs { await library.move(id, to: folderID) } }
         return true
     }
+
+    /// Tracks which row a drag is over, so only that row highlights.
+    private func targeting(_ filter: LibraryFilter) -> (Bool) -> Void {
+        { isOver in
+            if isOver { dropTarget = filter } else if dropTarget == filter { dropTarget = nil }
+        }
+    }
 }
 
 private struct SidebarRow: View {
@@ -224,6 +238,8 @@ private struct SidebarRow: View {
     var count: Int?
     let isSelected: Bool
     var trailingDot = false
+    /// A dragged meeting is over this row and would be filed here on drop.
+    var isTargeted = false
     let action: () -> Void
     @State private var isHovered = false
 
@@ -238,17 +254,24 @@ private struct SidebarRow: View {
                 if trailingDot { RecordingDot() }
                 if let count, count > 0 {
                     Text("\(count)").font(.system(size: 11).monospacedDigit()).foregroundStyle(Theme.tertiary)
+                        .contentTransition(.numericText(value: Double(count)))
                 }
             }
             .font(.system(size: 13, weight: isSelected ? .medium : .regular))
             .padding(.horizontal, 10)
             .padding(.vertical, 6)
-            .background(isSelected ? Theme.hover : isHovered ? Theme.hover.opacity(0.5) : .clear, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+            .background(
+                isTargeted ? Theme.highlight.opacity(0.12) : isSelected ? Theme.hover : isHovered ? Theme.hover.opacity(0.5) : .clear,
+                in: RoundedRectangle(cornerRadius: 8, style: .continuous)
+            )
+            .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).strokeBorder(Theme.highlight.opacity(isTargeted ? 0.5 : 0)))
             .contentShape(Rectangle())
         }
         .buttonStyle(PressableStyle())
         .onHover { isHovered = $0 }
         .motion(Motion.press, value: isHovered)
+        .motion(Motion.press, value: isTargeted)
+        .motion(Motion.quick, value: count)
     }
 }
 

@@ -73,6 +73,14 @@ private struct RiseEffect: ViewModifier {
     }
 }
 
+extension View {
+    /// Rises into place, like `.rise`, once `isShown` turns true, after `delay`. For staggered entrances of views
+    /// that are already laid out, so a group can arrive one by one without blocking interaction.
+    func rise(isShown: Bool, delay: Double = 0) -> some View {
+        modifier(RiseEffect(progress: isShown ? 1 : 0)).motion(Motion.standard.delay(delay), value: isShown)
+    }
+}
+
 /// Scales to 0.97 while pressed, so every click is acknowledged on mouse-down.
 struct PressableStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
