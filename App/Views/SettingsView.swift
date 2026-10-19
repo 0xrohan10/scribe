@@ -45,6 +45,7 @@ struct SettingsView: View {
                     }
                 }
                 PermissionsSection()
+                AboutSection()
             }
             .formStyle(.grouped)
             .scrollContentBackground(.hidden)
@@ -293,5 +294,24 @@ private struct PermissionsSection: View {
 
     private func open(_ pane: String) {
         NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?\(pane)")!)
+    }
+}
+
+private struct AboutSection: View {
+    private let info = Bundle.main.infoDictionary ?? [:]
+
+    var body: some View {
+        Section("About") {
+            LabeledContent("Version") {
+                Text("\(info["CFBundleShortVersionString"] as? String ?? "?") (\(info["CFBundleVersion"] as? String ?? "?"))")
+                    .textSelection(.enabled)
+            }
+            LabeledContent("Commit") {
+                // Stamped into the built Info.plist by the "Stamp git SHA" build phase.
+                Text(info["ScribeGitSHA"] as? String ?? "unknown")
+                    .monospaced()
+                    .textSelection(.enabled)
+            }
+        }
     }
 }

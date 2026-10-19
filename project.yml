@@ -58,6 +58,14 @@ targets:
           CODE_SIGN_STYLE: Manual
           CODE_SIGN_IDENTITY: Developer ID Application
           OTHER_CODE_SIGN_FLAGS: --timestamp
+    postBuildScripts:
+      - name: Stamp git SHA
+        basedOnDependencyAnalysis: false
+        script: |
+          SHA=$(git -C "$SRCROOT" rev-parse --short HEAD 2>/dev/null || echo unknown)
+          PLIST="$TARGET_BUILD_DIR/$INFOPLIST_PATH"
+          /usr/libexec/PlistBuddy -c "Delete :ScribeGitSHA" "$PLIST" 2>/dev/null || true
+          /usr/libexec/PlistBuddy -c "Add :ScribeGitSHA string $SHA" "$PLIST"
     dependencies:
       - package: ScribeKit
         product: Core

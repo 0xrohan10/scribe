@@ -63,6 +63,8 @@ The app icon (`App/AppIcon.icon`, an Icon Composer document) and the menu bar ma
 
 Debug builds sign with your Apple Development certificate (Xcode ▸ Settings ▸ Accounts creates one), so macOS keeps their permissions and Keychain access across rebuilds.
 
+Settings ▸ About shows the version and the commit the app was built from. The version and build number are `CFBundleShortVersionString` and `CFBundleVersion` in `project.yml`. The commit comes from the "Stamp git SHA" build phase, which writes `git rev-parse --short HEAD` into the built app's Info.plist as `ScribeGitSHA` on every build. Without git, it reads "unknown".
+
 ### Testing process taps (do this early)
 
 Start a Zoom call or play audio in Chrome, then run:
