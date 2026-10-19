@@ -12,6 +12,16 @@ public enum LLMError: Error, LocalizedError {
     }
 }
 
+extension URLSession {
+    /// A non-streaming request that throws `LLMError.http` on a non-2xx status.
+    func checkedData(for request: URLRequest) async throws -> Data {
+        let (data, response) = try await data(for: request)
+        let status = (response as? HTTPURLResponse)?.statusCode ?? 0
+        guard (200..<300).contains(status) else { throw LLMError.http(status: status, body: String(decoding: data, as: UTF8.self)) }
+        return data
+    }
+}
+
 enum ServerSentEvents {
     /// Both Anthropic and OpenAI stream snake_case JSON.
     static let snakeCaseDecoder: JSONDecoder = {

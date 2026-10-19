@@ -73,9 +73,13 @@ public protocol LLMProvider: Sendable {
     var id: String { get }
     var capabilities: LLMCapabilities { get }
     func complete(_ req: LLMRequest) -> AsyncThrowingStream<LLMDelta, Error>
+    /// Model ids this provider can use right now, newest first. Empty when the provider can't list them.
+    func availableModels() async throws -> [String]
 }
 
 extension LLMProvider {
+    public func availableModels() async throws -> [String] { [] }
+
     /// Collects a streamed completion into a single string.
     public func completeText(_ req: LLMRequest) async throws -> String {
         var out = ""

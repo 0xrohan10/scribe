@@ -28,6 +28,18 @@ public struct AnthropicProvider: LLMProvider {
         }
     }
 
+    public func availableModels() async throws -> [String] {
+        struct Response: Decodable {
+            var data: [Model]
+            struct Model: Decodable { var id: String }
+        }
+        var request = URLRequest(url: baseURL.appending(path: "v1/models").appending(queryItems: [.init(name: "limit", value: "100")]))
+        request.setValue(apiKey, forHTTPHeaderField: "x-api-key")
+        request.setValue("2023-06-01", forHTTPHeaderField: "anthropic-version")
+        // Already newest first.
+        return try JSONDecoder().decode(Response.self, from: await session.checkedData(for: request)).data.map(\.id)
+    }
+
     func urlRequest(_ req: LLMRequest) throws -> URLRequest {
         var body: [String: Any] = [
             "model": req.params.model ?? model,

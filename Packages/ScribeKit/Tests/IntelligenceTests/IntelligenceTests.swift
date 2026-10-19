@@ -70,6 +70,22 @@ import Testing
         let body = try JSONSerialization.jsonObject(with: request.httpBody!) as! [String: Any]
         let messages = body["messages"] as! [[String: String]]
         #expect(messages.map { $0["role"]! } == ["system", "user"])
+        #expect(body["max_tokens"] as? Int == 2048)
+        #expect(body["max_completion_tokens"] == nil)
+    }
+
+    @Test func openAIUsesMaxCompletionTokens() throws {
+        let provider = OpenAICompatibleProvider(config: ProviderConfig(model: "gpt-6-luna"))
+        let request = try provider.urlRequest(LLMRequest(system: nil, messages: [.init(role: .user, content: "q")]))
+        let body = try JSONSerialization.jsonObject(with: request.httpBody!) as! [String: Any]
+        #expect(body["max_completion_tokens"] as? Int == 2048)
+        #expect(body["max_tokens"] == nil)
+    }
+
+    @Test func modelListKeepsChatModelsNewestFirst() throws {
+        let json = #"{"data":[{"id":"gpt-4.1","created":1},{"id":"text-embedding-3-large","created":3},{"id":"gpt-6-luna","created":5},{"id":"o3","created":2},{"id":"gpt-4o-realtime-preview","created":4},{"id":"dall-e-3","created":6}]}"#
+        #expect(try OpenAIModelList.ids(from: Data(json.utf8), chatOnly: true) == ["gpt-6-luna", "o3", "gpt-4.1"])
+        #expect(try OpenAIModelList.ids(from: Data(json.utf8), chatOnly: false).count == 6)
     }
 }
 

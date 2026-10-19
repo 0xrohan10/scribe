@@ -28,13 +28,24 @@ public struct OpenAICompatibleProvider: LLMProvider {
         }
     }
 
+    public func availableModels() async throws -> [String] {
+        var request = URLRequest(url: baseURL.appending(path: "models"))
+        if let apiKey, !apiKey.isEmpty { request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization") }
+        return try OpenAIModelList.ids(from: await session.checkedData(for: request), chatOnly: isOpenAI)
+    }
+
+    /// OpenAI itself, as opposed to a compatible server.
+    var isOpenAI: Bool { baseURL.host() == Self.defaultBaseURL.host() }
+
     func urlRequest(_ req: LLMRequest) throws -> URLRequest {
         var messages: [[String: String]] = []
         if let system = req.system { messages.append(["role": "system", "content": system]) }
         messages += req.messages.map { ["role": $0.role.rawValue, "content": $0.content] }
+        // OpenAI deprecated `max_tokens` and rejects it for reasoning models; many compatible servers only know `max_tokens`.
+        let maxTokensKey = isOpenAI ? "max_completion_tokens" : "max_tokens"
         var body: [String: Any] = [
             "model": req.params.model ?? model,
-            "max_tokens": req.params.maxTokens,
+            maxTokensKey: req.params.maxTokens,
             "stream": true,
             "messages": messages,
         ]
@@ -46,6 +57,31 @@ public struct OpenAICompatibleProvider: LLMProvider {
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.httpBody = try JSONSerialization.data(withJSONObject: body)
         return request
+    }
+}
+
+enum OpenAIModelList {
+    private struct Response: Decodable {
+        var data: [Model]
+        struct Model: Decodable {
+            var id: String
+            var created: Int?
+        }
+    }
+
+    /// OpenAI's `/models` also lists embedding, audio, image and moderation models; `chatOnly` keeps the GPT and o-series chat models.
+    static func ids(from data: Data, chatOnly: Bool) throws -> [String] {
+        let models = try JSONDecoder().decode(Response.self, from: data).data
+        return models
+            .filter { !chatOnly || isChatModel($0.id) }
+            .sorted { ($0.created ?? 0, $1.id) > ($1.created ?? 0, $0.id) }
+            .map(\.id)
+    }
+
+    private static func isChatModel(_ id: String) -> Bool {
+        let isFamily = id.hasPrefix("gpt-") || id.hasPrefix("chatgpt-") || id.wholeMatch(of: /o\d.*/) != nil
+        let excluded = ["audio", "realtime", "tts", "transcribe", "image", "search", "instruct", "embedding", "moderation"]
+        return isFamily && !excluded.contains { id.contains($0) }
     }
 }
 

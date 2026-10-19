@@ -31,8 +31,7 @@ final class AppModel {
         didSet {
             settingsStore.save(settings)
             if settings.transcriptionProviderID != oldValue.transcriptionProviderID || settings.models != oldValue.models {
-                // The model field saves per keystroke; wait for typing to stop before loading a model.
-                prepareTranscriber(after: .seconds(1))
+                prepareTranscriber()
             }
         }
     }
@@ -327,7 +326,7 @@ final class AppModel {
     }
 
     /// Loads a local model in the background. Recording waits for it, since audio captured before it's ready would be lost.
-    private func prepareTranscriber(after delay: Duration = .zero) {
+    private func prepareTranscriber() {
         preparing?.cancel()
         guard let id = settings.transcriptionProviderID, let transcriber = try? makeProvider(Providers.transcription, id: id) else {
             transcriberStatus = .ready
@@ -336,7 +335,6 @@ final class AppModel {
         transcriberStatus = .preparing
         preparing = Task {
             do {
-                try await Task.sleep(for: delay)
                 try await transcriber.prepare()
                 guard !Task.isCancelled else { return }
                 transcriberStatus = .ready

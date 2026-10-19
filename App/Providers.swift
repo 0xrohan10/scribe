@@ -16,7 +16,7 @@ enum Providers {
     static let llm: ProviderRegistry<any LLMProvider> = {
         var r = ProviderRegistry<any LLMProvider>()
         r.register(.init(id: "anthropic", displayName: "Anthropic Claude", needsAPIKey: true, defaultModel: AnthropicProvider.defaultModel)) { AnthropicProvider(config: $0) }
-        r.register(.init(id: "openai-compatible", displayName: "OpenAI-compatible", needsBaseURL: true, defaultModel: "gpt-4.1", defaultBaseURL: OpenAICompatibleProvider.defaultBaseURL)) { OpenAICompatibleProvider(config: $0) }
+        r.register(.init(id: "openai-compatible", displayName: "OpenAI (or compatible)", needsBaseURL: true, defaultModel: "gpt-4.1", defaultBaseURL: OpenAICompatibleProvider.defaultBaseURL)) { OpenAICompatibleProvider(config: $0) }
         return r
     }()
 
