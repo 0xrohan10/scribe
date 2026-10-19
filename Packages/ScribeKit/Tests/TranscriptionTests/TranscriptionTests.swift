@@ -64,6 +64,24 @@ import Testing
         #expect(out.last?.isFinal == true)
     }
 
+    @Test func decodeQueueKeepsFinalsAndOnlyTheNewestPartial() {
+        func u(_ start: TimeInterval, final: Bool) -> UtteranceSegmenter.Utterance {
+            .init(samples: [], start: start, end: start + 1, isFinal: final)
+        }
+        var queue = DecodeQueue()
+        queue.push(u(0, final: false))
+        queue.push(u(1, final: false))
+        queue.push(u(2, final: true))
+        queue.push(u(3, final: false))
+        queue.push(u(4, final: false))
+        queue.push(u(5, final: true))
+        // Partials superseded while Whisper was busy are skipped; no final is ever dropped.
+        #expect(queue.pending.map(\.start) == [2, 5])
+        queue.push(u(6, final: false))
+        #expect(queue.pop()?.start == 2)
+        #expect(queue.pending.map(\.start) == [5, 6])
+    }
+
     @Test func removesWhisperTags() {
         #expect(LoadedWhisper.removingTags("[BLANK_AUDIO]") == "")
         #expect(LoadedWhisper.removingTags("( in foreign language )") == "")

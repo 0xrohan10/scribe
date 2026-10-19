@@ -1,6 +1,7 @@
 @preconcurrency import AVFAudio
 import Core
 import Foundation
+import os
 @preconcurrency import WhisperKit
 
 /// On-device Whisper via WhisperKit (Core ML). Downloads the model on first use.
@@ -34,9 +35,9 @@ public struct WhisperKitProvider: TranscriptionProvider {
                     let glossary = whisper.glossaryTokens(vocabulary)
                     let format = AVAudioFormat(
                         commonFormat: .pcmFormatFloat32, sampleRate: Double(WhisperKit.sampleRate), channels: 1, interleaved: false)!
-                    let converter = PCMConverter(to: format)
-                    var segmenter = UtteranceSegmenter()
-                    var speaker = Speaker.them
+                    let speaker = OSAllocatedUnfairLock(initialState: Speaker.them)
+                    let queue = OSAllocatedUnfairLock(initialState: DecodeQueue())
+                    let (wake, wakeUp) = AsyncStream.makeStream(of: Void.self, bufferingPolicy: .bufferingNewest(1))
                     var segmentID = UUID()
                     // The last final line, so each utterance is decoded with what was just said as context.
                     var previous = ""
@@ -46,7 +47,7 @@ public struct WhisperKitProvider: TranscriptionProvider {
                         if !text.isEmpty {
                             continuation.yield(
                                 TranscriptSegment(
-                                    id: segmentID, speaker: speaker, text: text,
+                                    id: segmentID, speaker: speaker.withLock { $0 }, text: text,
                                     start: utterance.start, end: utterance.end, isFinal: utterance.isFinal))
                         }
                         if utterance.isFinal {
@@ -55,13 +56,30 @@ public struct WhisperKitProvider: TranscriptionProvider {
                         }
                     }
 
-                    for await chunk in audio {
-                        speaker = chunk.source.speaker
-                        guard let buffer = converter.convert(chunk), let data = buffer.floatChannelData else { continue }
-                        let samples = Array(UnsafeBufferPointer(start: data[0], count: Int(buffer.frameLength)))
-                        if let utterance = segmenter.append(samples, at: chunk.timestamp) { try await emit(utterance) }
+                    // Reading audio never waits on Whisper. If it did, a slow decode would back the capture stream
+                    // up until it dropped audio, and the segmenter would stitch the leftovers into nonsense.
+                    try await withThrowingTaskGroup(of: Void.self) { group in
+                        group.addTask {
+                            let converter = PCMConverter(to: format)
+                            var segmenter = UtteranceSegmenter()
+                            func push(_ utterance: UtteranceSegmenter.Utterance?) {
+                                guard let utterance else { return }
+                                queue.withLock { $0.push(utterance) }
+                                wakeUp.yield()
+                            }
+                            for await chunk in audio {
+                                speaker.withLock { $0 = chunk.source.speaker }
+                                guard let buffer = converter.convert(chunk), let data = buffer.floatChannelData else { continue }
+                                push(segmenter.append(Array(UnsafeBufferPointer(start: data[0], count: Int(buffer.frameLength))), at: chunk.timestamp))
+                            }
+                            push(segmenter.flush())
+                            wakeUp.finish()
+                        }
+                        for await _ in wake {
+                            while let utterance = queue.withLock({ $0.pop() }) { try await emit(utterance) }
+                        }
+                        try await group.waitForAll()
                     }
-                    if let utterance = segmenter.flush() { try await emit(utterance) }
                     continuation.finish()
                 } catch {
                     continuation.finish(throwing: error)
@@ -166,6 +184,21 @@ struct UtteranceSegmenter {
 
     private func rms(_ x: [Float]) -> Float {
         (x.reduce(0) { $0 + $1 * $1 } / Float(x.count)).squareRoot()
+    }
+}
+
+/// Utterances waiting for Whisper. Finals wait their turn; a partial is replaced by whatever arrives after it,
+/// since that re-decodes the same audio with more on the end. So partials slow down rather than pile up when decoding lags.
+struct DecodeQueue {
+    private(set) var pending: [UtteranceSegmenter.Utterance] = []
+
+    mutating func push(_ utterance: UtteranceSegmenter.Utterance) {
+        if pending.last?.isFinal == false { pending.removeLast() }
+        pending.append(utterance)
+    }
+
+    mutating func pop() -> UtteranceSegmenter.Utterance? {
+        pending.isEmpty ? nil : pending.removeFirst()
     }
 }
 
