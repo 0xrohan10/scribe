@@ -59,14 +59,21 @@ extension AnyTransition {
     /// Rises a few points into place while fading in, slightly blurred so the two states read as one.
     /// Under Reduce Motion it only fades.
     static var rise: AnyTransition { .modifier(active: RiseEffect(progress: 0), identity: RiseEffect(progress: 1)) }
+
+    /// `.rise`, also growing from 96% out of `anchor`, for things that come from a corner, like a chat bubble from its tail.
+    static func rise(from anchor: UnitPoint) -> AnyTransition {
+        .modifier(active: RiseEffect(progress: 0, anchor: anchor), identity: RiseEffect(progress: 1, anchor: anchor))
+    }
 }
 
 private struct RiseEffect: ViewModifier {
     let progress: Double
+    var anchor: UnitPoint?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     func body(content: Content) -> some View {
         content
+            .scaleEffect(anchor == nil || reduceMotion ? 1 : 0.96 + 0.04 * progress, anchor: anchor ?? .center)
             .opacity(progress)
             .offset(y: reduceMotion ? 0 : (1 - progress) * 6)
             .blur(radius: reduceMotion ? 0 : (1 - progress) * 2)
