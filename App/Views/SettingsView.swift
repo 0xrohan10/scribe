@@ -17,7 +17,7 @@ struct SettingsView: View {
             Form {
                 ProviderSection(
                     title: "Transcription", registry: Providers.transcription,
-                    selection: $model.settings.transcriptionProviderID, allowsNone: true, model: model)
+                    selection: $model.settings.transcriptionProviderID, allowsNone: false, model: model)
                 ProviderSection(
                     title: "AI (Q&A and summaries)", registry: Providers.llm,
                     selection: Binding($model.settings.llmProviderID), allowsNone: false, model: model)

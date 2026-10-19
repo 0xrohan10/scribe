@@ -13,7 +13,7 @@ Packages/ScribeKit/       one SwiftPM target per domain; domains import only Cor
   Core/                   models, provider + repository protocols, SessionClock, Broadcaster
   Capture/                MicrophoneSource (AVAudioEngine), SystemAudioSource (process tap + aggregate device), m4a writing
   Detection/              mic-in-use listener, Zoom (CptHost) / Teams / Meet (AX window titles) probes, MicTriggeredMeetingDetector
-  Transcription/          Fake, SpeechAnalyzer; WhisperKit / Deepgram / AssemblyAI / OpenAI Realtime are TODO stubs
+  Transcription/          Fake, SpeechAnalyzer, WhisperKit; Deepgram / AssemblyAI / OpenAI Realtime are TODO stubs
   Intelligence/           Anthropic (streaming + server web search), OpenAI-compatible, Parallel web search, Jev search gate, QAEngine, LLMSummarizer, prompts
   Notes/                  NotesController, NoteDraft (anchors to when you *start* typing), NoteAnchoring
   Session/                MeetingSession: lifecycle state machine, per-source transcription, persistence fan-out

@@ -10,8 +10,7 @@ public enum SystemAudioMode: String, Codable, Sendable, CaseIterable {
 
 /// Non-secret preferences. API keys never live here; they're in the Keychain via `SecretStore`.
 public struct AppSettings: Codable, Sendable, Equatable {
-    /// No default: the user picks one before their first recording.
-    public var transcriptionProviderID: String?
+    public var transcriptionProviderID: String? = "whisperkit"
     public var llmProviderID: String = "anthropic"
     /// Client-side web search for Q&A. When unset, the AI provider's own hosted search is used if it has one.
     public var webSearchProviderID: String?
@@ -32,7 +31,7 @@ public struct AppSettings: Codable, Sendable, Equatable {
         // Decode field-by-field with defaults so adding a setting never resets the others.
         let c = try decoder.container(keyedBy: CodingKeys.self)
         let d = AppSettings()
-        transcriptionProviderID = try c.decodeIfPresent(String.self, forKey: .transcriptionProviderID)
+        transcriptionProviderID = try c.decodeIfPresent(String.self, forKey: .transcriptionProviderID) ?? d.transcriptionProviderID
         llmProviderID = try c.decodeIfPresent(String.self, forKey: .llmProviderID) ?? d.llmProviderID
         webSearchProviderID = try c.decodeIfPresent(String.self, forKey: .webSearchProviderID)
         searchGateProviderID = try c.decodeIfPresent(String.self, forKey: .searchGateProviderID)
