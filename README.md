@@ -107,6 +107,12 @@ Leave out `--bundle` to tap all apps, or use `--bundle us.zoom.xos` for Zoom. Th
    scripts/release.sh
    ```
 
+5. Push the commit and its tag. `bump.sh` makes annotated tags, so `--follow-tags` pushes them with `main`:
+
+   ```bash
+   git push origin main --follow-tags
+   ```
+
 The app is unsandboxed, uses the hardened runtime with `com.apple.security.device.audio-input`, and is signed with Developer ID.
 
 ### Installing a local build without Developer ID
