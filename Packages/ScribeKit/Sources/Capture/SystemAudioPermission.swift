@@ -25,8 +25,9 @@ public enum SystemAudioPermission {
     }
 
     /// Shows the system prompt if the user hasn't been asked yet; otherwise returns the stored answer.
+    /// Without the SPI it only reports a known denial, so a missing symbol doesn't read as "off".
     public static func request() async -> Bool {
-        guard let symbol = dlsym(tcc, "TCCAccessRequest") else { return false }
+        guard let symbol = dlsym(tcc, "TCCAccessRequest") else { return status != .denied }
         let request = unsafeBitCast(symbol, to: Request.self)
         return await withCheckedContinuation { continuation in
             request(service as CFString, nil) { continuation.resume(returning: $0) }
