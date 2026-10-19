@@ -1,3 +1,2 @@
-// Your Apple Developer Team ID, needed for Release (Developer ID) builds.
-// Debug builds are signed ad hoc and run without it.
-DEVELOPMENT_TEAM =
+// Your Apple Developer Team ID. Debug signs with its Apple Development certificate, Release with Developer ID.
+DEVELOPMENT_TEAM = 3D54BA7T8A

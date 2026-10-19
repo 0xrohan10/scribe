@@ -61,7 +61,7 @@ The smaller commands (`launch`, `menu`, `press`, `type`, `wait`, `read`, `tree`,
 
 The app icon (`App/AppIcon.icon`, an Icon Composer document) and the menu bar mark (`ScribeMark` in `App/Assets.xcassets`) are generated from one drawing. After changing the mark, run `swift scripts/make-icons.swift`.
 
-Debug builds are signed ad hoc. That means macOS may ask again for permissions and Keychain access after rebuilds.
+Debug builds sign with your Apple Development certificate (Xcode ▸ Settings ▸ Accounts creates one), so macOS keeps their permissions and Keychain access across rebuilds.
 
 ### Testing process taps (do this early)
 
