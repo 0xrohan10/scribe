@@ -6,6 +6,9 @@ struct ScribeApp: App {
     @State private var model: AppModel
 
     init() {
+        // As an LSUIElement app with an Icon Composer icon, AppKit falls back to the generic app icon for alerts;
+        // IconServices renders the real one, as Finder and the Dock do.
+        NSApplication.shared.applicationIconImage = NSWorkspace.shared.icon(forFile: Bundle.main.bundlePath)
         #if DEBUG
         if let dir = ScreenshotMode.directory {
             let model = ScreenshotMode.makeModel()
