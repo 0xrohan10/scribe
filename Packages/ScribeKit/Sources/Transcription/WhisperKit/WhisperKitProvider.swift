@@ -9,10 +9,12 @@ public struct WhisperKitProvider: TranscriptionProvider {
     public let id = "whisperkit"
     public let model: String
     public let language: String?
+    public let vocabulary: [String]
 
     public init(config: ProviderConfig, language: String? = Locale.current.language.languageCode?.identifier) {
         self.model = config.model ?? Self.defaultModel
         self.language = language
+        self.vocabulary = config.vocabulary
     }
 
     /// Large-v3 turbo, quantized: near large-v3 accuracy at a fraction of the size, fast enough to keep up live.
@@ -23,12 +25,13 @@ public struct WhisperKitProvider: TranscriptionProvider {
     }
 
     public func transcribe(_ audio: AsyncStream<Core.AudioChunk>) -> AsyncThrowingStream<TranscriptSegment, Error> {
-        let (model, language) = (model, language)
+        let (model, language, vocabulary) = (model, language, vocabulary)
         return AsyncThrowingStream { continuation in
             let task = Task {
                 do {
                     let whisper = try await WhisperModels.shared.load(model)
                     let options = DecodingOptions(language: language, skipSpecialTokens: true, withoutTimestamps: true)
+                    let glossary = whisper.glossaryTokens(vocabulary)
                     let format = AVAudioFormat(
                         commonFormat: .pcmFormatFloat32, sampleRate: Double(WhisperKit.sampleRate), channels: 1, interleaved: false)!
                     let converter = PCMConverter(to: format)
@@ -39,7 +42,7 @@ public struct WhisperKitProvider: TranscriptionProvider {
                     var previous = ""
 
                     func emit(_ utterance: UtteranceSegmenter.Utterance) async throws {
-                        let text = try await whisper.transcribe(utterance.samples, options: options, prompt: previous)
+                        let text = try await whisper.transcribe(utterance.samples, options: options, glossary: glossary, previous: previous)
                         if !text.isEmpty {
                             continuation.yield(
                                 TranscriptSegment(
@@ -192,15 +195,40 @@ private actor WhisperModels {
 struct LoadedWhisper: @unchecked Sendable {
     let kit: WhisperKit
 
-    func transcribe(_ samples: [Float], options: DecodingOptions, prompt: String) async throws -> String {
+    /// Whisper allows about 224 prompt tokens.
+    static let promptBudget = 200
+    /// The share of the prompt the vocabulary may take; the rest is the previous line.
+    static let glossaryBudget = 100
+
+    /// The vocabulary as a prompt prefix ("Rohan, Scribe, WhisperKit."), which biases Whisper towards those spellings.
+    /// Terms past the budget are dropped whole rather than cut mid-word.
+    func glossaryTokens(_ terms: [String]) -> [Int] {
+        guard let tokenizer = kit.tokenizer else { return [] }
+        var kept: [String] = []
+        var count = 0
+        for term in terms {
+            let cost = encode(" \(term),", tokenizer).count
+            guard count + cost <= Self.glossaryBudget else { break }
+            kept.append(term)
+            count += cost
+        }
+        return kept.isEmpty ? [] : encode(" " + kept.joined(separator: ", ") + ".", tokenizer)
+    }
+
+    func transcribe(_ samples: [Float], options: DecodingOptions, glossary: [Int], previous: String) async throws -> String {
         var options = options
-        if !prompt.isEmpty, let tokenizer = kit.tokenizer {
-            // Whisper allows about 224 prompt tokens; the tail of the last line is the useful part.
-            options.promptTokens = Array(
-                tokenizer.encode(text: " " + prompt).filter { $0 < tokenizer.specialTokens.specialTokenBegin }.suffix(200))
+        if let tokenizer = kit.tokenizer {
+            // The tail of the last line is the useful part of it.
+            let previous = previous.isEmpty ? [] : encode(" " + previous, tokenizer).suffix(Self.promptBudget - glossary.count)
+            let prompt = glossary + previous
+            if !prompt.isEmpty { options.promptTokens = prompt }
         }
         let text = try await kit.transcribe(audioArray: samples, decodeOptions: options).map(\.text).joined()
         return Self.removingTags(text)
+    }
+
+    private func encode(_ text: String, _ tokenizer: any WhisperTokenizer) -> [Int] {
+        tokenizer.encode(text: text).filter { $0 < tokenizer.specialTokens.specialTokenBegin }
     }
 
     /// Drops the non-speech tags Whisper emits, like "[BLANK_AUDIO]", "[Music]" or "( in foreign language )".

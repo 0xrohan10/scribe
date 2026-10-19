@@ -5,17 +5,23 @@ public struct LLMSummarizer: MeetingSummarizer {
     public var llm: any LLMProvider
     public var templates: [SummaryTemplate]
     public var params: ModelParams
+    /// The user's vocabulary terms, so the summary spells names their way.
+    public var vocabulary: [String]
 
-    public init(llm: any LLMProvider, templates: [SummaryTemplate] = SummaryTemplates.all, params: ModelParams = .init(maxTokens: 4096)) {
+    public init(
+        llm: any LLMProvider, templates: [SummaryTemplate] = SummaryTemplates.all, params: ModelParams = .init(maxTokens: 4096),
+        vocabulary: [String] = []
+    ) {
         self.llm = llm
         self.templates = templates
         self.params = params
+        self.vocabulary = vocabulary
     }
 
     public func summarize(meeting: Meeting, transcript: Transcript, notes: [Note]) async throws -> MeetingSummary {
         let template = templates.first { $0.id == meeting.templateID } ?? .general
         let request = LLMRequest(
-            system: Prompts.summarySystem(template: template),
+            system: Prompts.summarySystem(template: template, vocabulary: vocabulary),
             messages: [LLMMessage(role: .user, content: Prompts.summaryInput(meeting: meeting, transcript: transcript, notes: notes))],
             params: params)
         let text = try await llm.completeText(request)

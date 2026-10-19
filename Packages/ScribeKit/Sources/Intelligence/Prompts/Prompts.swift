@@ -2,7 +2,7 @@ import Core
 import Foundation
 
 enum Prompts {
-    static func qaSystem(transcript: String, now: TimeInterval) -> String {
+    static func qaSystem(transcript: String, now: TimeInterval, vocabulary: [String] = []) -> String {
         """
         You are Scribe, a meeting assistant answering the user's questions while a meeting is in progress. \
         It is currently \(now.clockString) into the meeting.
@@ -14,11 +14,18 @@ enum Prompts {
         Answer in a few sentences, plainly, so the user can glance at it mid-conversation. When citing the \
         transcript, include the [m:ss] timestamp. If the question needs facts not in the transcript, use web \
         search when available and say what came from the web. If you don't know, say so.
-
+        \(vocabularyNote(vocabulary))
         <transcript>
         \(transcript.isEmpty ? "(nothing yet)" : transcript)
         </transcript>
         """
+    }
+
+    /// The user's spellings for names and terms the transcriber may have misheard. Empty when there are none.
+    static func vocabularyNote(_ terms: [String]) -> String {
+        guard !terms.isEmpty else { return "" }
+        return "\nThe user's vocabulary, below, is how they spell names and terms; the transcript may have misheard them. "
+            + "Use these spellings.\n<vocabulary>\n\(terms.joined(separator: "\n"))\n</vocabulary>\n"
     }
 
     static func webResults(_ results: [WebSearchResult]) -> String {
@@ -28,7 +35,7 @@ enum Prompts {
             + "\n</web_results>"
     }
 
-    static func summarySystem(template: SummaryTemplate) -> String {
+    static func summarySystem(template: SummaryTemplate, vocabulary: [String] = []) -> String {
         """
         You summarise meetings from an automatic transcript plus the user's own notes. "Me" in the \
         transcript is the user; "Them" is everyone else.
@@ -39,7 +46,7 @@ enum Prompts {
 
         Be specific and concise. Don't invent owners or dates; use null when unknown. Use "Me" as the \
         owner for things the user committed to.
-        \(template.instructions.isEmpty ? "" : "\nMeeting type: \(template.name). \(template.instructions)\n")
+        \(vocabularyNote(vocabulary))\(template.instructions.isEmpty ? "" : "\nMeeting type: \(template.name). \(template.instructions)\n")
         Reply with only a JSON object of this shape:
         {
           "overview": "2–4 sentence summary",

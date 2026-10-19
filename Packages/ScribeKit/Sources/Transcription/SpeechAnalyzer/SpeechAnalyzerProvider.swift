@@ -10,9 +10,11 @@ import os
 public struct SpeechAnalyzerProvider: TranscriptionProvider {
     public let id = "speech-analyzer"
     public let locale: Locale
+    public let vocabulary: [String]
 
-    public init(locale: Locale = .current) {
+    public init(locale: Locale = .current, vocabulary: [String] = []) {
         self.locale = locale
+        self.vocabulary = vocabulary
     }
 
     public static var isSupported: Bool {
@@ -23,7 +25,7 @@ public struct SpeechAnalyzerProvider: TranscriptionProvider {
         guard #available(macOS 26, *) else {
             return AsyncThrowingStream { $0.finish(throwing: ProviderError.unavailable(id)) }
         }
-        return SpeechAnalyzerEngine(locale: locale).transcribe(audio)
+        return SpeechAnalyzerEngine(locale: locale, vocabulary: vocabulary).transcribe(audio)
     }
 }
 
@@ -42,6 +44,7 @@ public enum SpeechAnalyzerError: Error, LocalizedError {
 @available(macOS 26, *)
 private struct SpeechAnalyzerEngine {
     let locale: Locale
+    let vocabulary: [String]
 
     func transcribe(_ audio: AsyncStream<AudioChunk>) -> AsyncThrowingStream<TranscriptSegment, Error> {
         AsyncThrowingStream { continuation in
@@ -70,6 +73,11 @@ private struct SpeechAnalyzerEngine {
             throw SpeechAnalyzerError.noAudioFormat
         }
         let analyzer = SpeechAnalyzer(modules: [transcriber])
+        if !vocabulary.isEmpty {
+            let context = AnalysisContext()
+            context.contextualStrings[.general] = vocabulary
+            try await analyzer.setContext(context)
+        }
         let (inputs, inputContinuation) = AsyncStream.makeStream(of: AnalyzerInput.self)
         // The stream carries a single source, so the speaker is fixed once the first chunk arrives.
         let speaker = OSAllocatedUnfairLock(initialState: Speaker.them)

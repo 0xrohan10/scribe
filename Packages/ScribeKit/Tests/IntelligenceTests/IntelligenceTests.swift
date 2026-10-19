@@ -178,6 +178,13 @@ import Testing
         #expect(input.contains("★ [1:05] budget?"))
         #expect(input.range(of: "<my_notes")!.lowerBound < input.range(of: "<transcript>")!.lowerBound)
     }
+
+    @Test func vocabularyOnlyAppearsWhenSet() {
+        #expect(!Prompts.summarySystem(template: .general).contains("<vocabulary>"))
+        #expect(!Prompts.qaSystem(transcript: "", now: 0).contains("<vocabulary>"))
+        #expect(Prompts.summarySystem(template: .general, vocabulary: ["Rohan", "Scribe"]).contains("<vocabulary>\nRohan\nScribe\n</vocabulary>"))
+        #expect(Prompts.qaSystem(transcript: "", now: 0, vocabulary: ["Rohan"]).contains("<vocabulary>\nRohan\n</vocabulary>"))
+    }
 }
 
 private struct FakeSearch: WebSearchTool {

@@ -31,11 +31,14 @@ public struct ProviderConfig: Sendable, Hashable {
     public var apiKey: String?
     public var model: String?
     public var baseURL: URL?
+    /// The user's custom vocabulary terms, for transcribers that can be biased towards them.
+    public var vocabulary: [String]
 
-    public init(apiKey: String? = nil, model: String? = nil, baseURL: URL? = nil) {
+    public init(apiKey: String? = nil, model: String? = nil, baseURL: URL? = nil, vocabulary: [String] = []) {
         self.apiKey = apiKey
         self.model = model
         self.baseURL = baseURL
+        self.vocabulary = vocabulary
     }
 }
 

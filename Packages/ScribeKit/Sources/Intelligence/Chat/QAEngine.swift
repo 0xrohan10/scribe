@@ -39,11 +39,14 @@ public struct QAEngine: Sendable {
     public var params: ModelParams
     /// How far back the local "just said" answers look.
     public var recentWindow: TimeInterval
+    /// The user's vocabulary terms, so answers spell names their way.
+    public var vocabulary: [String]
 
     public init(
         llm: any LLMProvider, webSearch: (any WebSearchTool)? = nil, searchGate: (any SearchGate)? = nil,
         context: any TranscriptContextProvider = RollingTranscriptContext(),
-        params: ModelParams = .init(maxTokens: 1024), recentWindow: TimeInterval = 30
+        params: ModelParams = .init(maxTokens: 1024), recentWindow: TimeInterval = 30,
+        vocabulary: [String] = []
     ) {
         self.llm = llm
         self.webSearch = webSearch
@@ -51,6 +54,7 @@ public struct QAEngine: Sendable {
         self.context = context
         self.params = params
         self.recentWindow = recentWindow
+        self.vocabulary = vocabulary
     }
 
     /// - Parameter history: earlier Q&A turns from this meeting, oldest first.
@@ -63,7 +67,7 @@ public struct QAEngine: Sendable {
             }
         }
 
-        let (llm, webSearch, searchGate, contextProvider, params) = (llm, webSearch, searchGate, context, params)
+        let (llm, webSearch, searchGate, contextProvider, params, vocabulary) = (llm, webSearch, searchGate, context, params, vocabulary)
         return AsyncThrowingStream { continuation in
             let task = Task {
                 do {
@@ -85,7 +89,7 @@ public struct QAEngine: Sendable {
                         tools = [.webSearch(maxUses: 3)]
                     }
                     let request = LLMRequest(
-                        system: Prompts.qaSystem(transcript: transcriptText, now: now),
+                        system: Prompts.qaSystem(transcript: transcriptText, now: now, vocabulary: vocabulary),
                         messages: history + [LLMMessage(role: .user, content: prompt)], tools: tools, params: params)
                     for try await delta in llm.complete(request) { continuation.yield(delta) }
                     continuation.finish()

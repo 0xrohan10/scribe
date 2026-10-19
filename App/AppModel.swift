@@ -213,14 +213,14 @@ final class AppModel {
             let environment = SessionEnvironment(
                 makeSources: makeSources,
                 transcriber: transcriber,
-                summarizer: settings.summarizeWhenMeetingEnds ? llm.map { LLMSummarizer(llm: $0) } : nil,
+                summarizer: settings.summarizeWhenMeetingEnds ? llm.map(makeSummarizer) : nil,
                 meetings: database.meetings, transcripts: database.transcripts, notes: database.notes,
-                summaries: database.summaries, audioFiles: audioFiles)
+                summaries: database.summaries, audioFiles: audioFiles, vocabulary: settings.vocabulary)
             let session = MeetingSession(meeting: meeting, scope: systemAudioScope(for: detected), environment: environment)
             let vm = MeetingViewModel(
                 meeting: meeting, session: session,
                 notes: NotesController(meetingID: meeting.id, clock: session.clock, repository: database.notes),
-                qa: llm.map(makeQA), summarizer: llm.map { LLMSummarizer(llm: $0) },
+                qa: llm.map(makeQA), summarizer: llm.map(makeSummarizer),
                 summaries: database.summaries, onFinish: { [weak self] in Task { await self?.refreshRecent() } })
             current = vm
             show(vm)
@@ -276,7 +276,7 @@ final class AppModel {
                 let llm = makeLLM()
                 let vm = try await MeetingViewModel.review(
                     meeting, transcripts: database.transcripts, noteRepository: database.notes, summaries: database.summaries,
-                    qa: llm.map(makeQA), summarizer: llm.map { LLMSummarizer(llm: $0) })
+                    qa: llm.map(makeQA), summarizer: llm.map(makeSummarizer))
                 if !isCapturing { current = vm }
                 show(vm)
             } catch {
@@ -353,7 +353,11 @@ final class AppModel {
         // A misconfigured search provider (e.g. no API key) falls back to the AI provider's own search.
         let webSearch = settings.webSearchProviderID.flatMap { try? makeProvider(Providers.webSearch, id: $0) }
         let searchGate = settings.searchGateProviderID.flatMap { try? makeProvider(Providers.searchGate, id: $0) }
-        return QAEngine(llm: llm, webSearch: webSearch, searchGate: searchGate)
+        return QAEngine(llm: llm, webSearch: webSearch, searchGate: searchGate, vocabulary: settings.vocabulary.terms)
+    }
+
+    private func makeSummarizer(_ llm: any LLMProvider) -> LLMSummarizer {
+        LLMSummarizer(llm: llm, vocabulary: settings.vocabulary.terms)
     }
 
     private func systemAudioScope(for detected: DetectedMeeting?) -> SystemAudioScope {

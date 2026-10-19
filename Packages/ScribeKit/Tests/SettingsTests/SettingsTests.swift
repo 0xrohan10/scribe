@@ -20,6 +20,7 @@ private struct MemorySecrets: SecretStore {
         settings.webSearchProviderID = "parallel"
         settings.searchGateProviderID = "jev"
         settings.baseURLs["openai-compatible"] = URL(string: "http://localhost:11434/v1")
+        settings.vocabulary = Vocabulary(entries: [VocabularyEntry(term: "Rohan", heardAs: "Rowan")])
         store.save(settings)
         #expect(store.load() == settings)
     }
@@ -39,5 +40,8 @@ private struct MemorySecrets: SecretStore {
 
         settings.models["anthropic"] = ""
         #expect(settings.config(for: descriptor, secrets: MemorySecrets(values: [:])).model == "claude-sonnet-5-5")
+
+        settings.vocabulary = Vocabulary(entries: [VocabularyEntry(term: "Rohan", heardAs: "Rowan"), VocabularyEntry(term: "Scribe")])
+        #expect(settings.config(for: descriptor, secrets: MemorySecrets(values: [:])).vocabulary == ["Rohan", "Scribe"])
     }
 }

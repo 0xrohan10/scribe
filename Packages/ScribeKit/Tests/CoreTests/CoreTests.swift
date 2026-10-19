@@ -72,3 +72,46 @@ extension Array {
         do { for try await e in s { append(e) } } catch {}
     }
 }
+
+@Suite struct VocabularyTests {
+    private func vocab(_ rules: [(String, String?)]) -> Vocabulary {
+        Vocabulary(entries: rules.map { VocabularyEntry(term: $0.0, heardAs: $0.1) })
+    }
+
+    @Test func correctsWholeWordsInAnyCaseKeepingSavedSpelling() {
+        let v = vocab([("Rohan", "rowan"), ("WhisperKit", "whisper kit")])
+        #expect(v.correct("Rowan said WHISPER  kit is fast, not rowans or arrowan") == "Rohan said WhisperKit is fast, not rowans or arrowan")
+    }
+
+    @Test func longestPhraseWins() {
+        let v = vocab([("Jo", "joe"), ("Joe Biden's dog", "joe biden")])
+        #expect(v.correct("joe met joe biden") == "Jo met Joe Biden's dog")
+    }
+
+    @Test func possessivesFollowButContractionsDont() {
+        let v = vocab([("Rohan", "rowan"), ("Dan", "don")])
+        #expect(v.correct("Rowan's plan and Rowan’s notes") == "Rohan's plan and Rohan’s notes")
+        #expect(v.correct("don't ask don") == "don't ask Dan")
+    }
+
+    @Test func escapesRegexCharacters() {
+        let v = vocab([("C#", "c sharp"), ("Node.js", "node.js")])
+        #expect(v.correct("c sharp and node.js but not nodexjs") == "C# and Node.js but not nodexjs")
+    }
+
+    @Test func termsAreDedupedAndIncludeCorrections() {
+        #expect(vocab([("Rohan", "rowan"), ("Scribe", nil), ("rohan", nil)]).terms == ["Rohan", "Scribe"])
+    }
+
+    @Test func validation() throws {
+        let v = vocab([("Scribe", nil)])
+        #expect(throws: VocabularyError.empty) { try v.validated(VocabularyEntry(term: "  ?! ")) }
+        #expect(throws: VocabularyError.tooLong) { try v.validated(VocabularyEntry(term: String(repeating: "a", count: 61))) }
+        #expect(throws: VocabularyError.duplicate("scribe")) { try v.validated(VocabularyEntry(term: "scribe")) }
+        let cleaned = try v.validated(VocabularyEntry(term: "  Whisper   Kit ", heardAs: " "))
+        #expect(cleaned.term == "Whisper Kit" && cleaned.heardAs == nil)
+        #expect(try v.validated(VocabularyEntry(term: "iPhone", heardAs: "iphone")).heardAs == "iphone")
+        // Editing an entry doesn't collide with itself.
+        #expect(try v.validated(v.entries[0]).term == "Scribe")
+    }
+}

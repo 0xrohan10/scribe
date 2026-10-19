@@ -6,7 +6,7 @@ import Transcription
 enum Providers {
     static let transcription: ProviderRegistry<any TranscriptionProvider> = {
         var r = ProviderRegistry<any TranscriptionProvider>()
-        r.register(.init(id: "speech-analyzer", displayName: "Apple SpeechAnalyzer (on-device)", isAvailable: SpeechAnalyzerProvider.isSupported)) { _ in SpeechAnalyzerProvider() }
+        r.register(.init(id: "speech-analyzer", displayName: "Apple SpeechAnalyzer (on-device)", isAvailable: SpeechAnalyzerProvider.isSupported)) { SpeechAnalyzerProvider(vocabulary: $0.vocabulary) }
         r.register(.init(id: "whisperkit", displayName: "Whisper (on-device)", defaultModel: WhisperKitProvider.defaultModel)) { WhisperKitProvider(config: $0) }
         r.register(.init(id: "fake", displayName: "Fake (demo lines)")) { _ in FakeTranscriptionProvider() }
         // TODO: DeepgramProvider, AssemblyAIProvider, OpenAIRealtimeProvider once implemented.

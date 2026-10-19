@@ -44,6 +44,7 @@ struct SettingsView: View {
                         ForEach(SummaryTemplates.all) { Text($0.name).tag($0.id) }
                     }
                 }
+                VocabularySection(vocabulary: $model.settings.vocabulary)
                 PermissionsSection()
                 AboutSection()
             }
@@ -246,6 +247,60 @@ private struct CommitField: View {
         do {
             try save(value)
             draft = value
+        } catch {
+            self.error = error.localizedDescription
+        }
+    }
+}
+
+/// Names and terms the transcriber should spell the user's way. Applies from the next meeting.
+private struct VocabularySection: View {
+    @Binding var vocabulary: Vocabulary
+    @State private var term = ""
+    @State private var heardAs = ""
+    @State private var error: String?
+
+    var body: some View {
+        Section {
+            HStack {
+                TextField("Word or name", text: $term, prompt: Text("Word or name"))
+                TextField("Often written as (optional)", text: $heardAs, prompt: Text("Often written as (optional)"))
+                Button("Add", action: add)
+                    .disabled(term.trimmingCharacters(in: .whitespaces).isEmpty)
+            }
+            .textFieldStyle(.roundedBorder)
+            .labelsHidden()
+            .onSubmit(add)
+            .onChange(of: term) { error = nil }
+            .onChange(of: heardAs) { error = nil }
+            if let error {
+                Text(error).font(.caption).foregroundStyle(.red)
+            }
+            ForEach(vocabulary.entries.reversed()) { entry in
+                HStack {
+                    Text(entry.term)
+                    if let heardAs = entry.heardAs {
+                        Text("replaces “\(heardAs)”").foregroundStyle(.secondary)
+                    }
+                    Spacer()
+                    Button("Remove", systemImage: "minus.circle") { vocabulary.entries.removeAll { $0.id == entry.id } }
+                        .labelStyle(.iconOnly)
+                        .buttonStyle(.borderless)
+                }
+            }
+        } header: {
+            Text("Vocabulary")
+        } footer: {
+            Text("Names and jargon help the transcriber and the AI spell them your way. Add what it writes instead to have it replaced in every transcript. Changes apply from the next meeting.")
+        }
+    }
+
+    private func add() {
+        do {
+            let entry = try vocabulary.validated(VocabularyEntry(term: term, heardAs: heardAs))
+            vocabulary.entries.append(entry)
+            term = ""
+            heardAs = ""
         } catch {
             self.error = error.localizedDescription
         }

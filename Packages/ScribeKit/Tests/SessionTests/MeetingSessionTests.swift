@@ -139,6 +139,22 @@ private struct StubbornTranscriber: TranscriptionProvider {
         #expect(await store.meeting(id: meeting.id)?.micAudioPath == "/tmp/mic.m4a")
     }
 
+    @Test func appliesVocabularyCorrectionsBeforeSavingAndBroadcasting() async throws {
+        let store = MemoryStore()
+        var env = environment(store, sources: [FakeAudioSource(.system, seconds: 4)])
+        env.vocabulary = Vocabulary(entries: [VocabularyEntry(term: "Billing-o-matic", heardAs: "billing system")])
+        let session = MeetingSession(meeting: Meeting(title: "T"), scope: .allApps, environment: env)
+        let events = session.events()
+        try await session.start()
+        await session.stop()
+
+        var broadcast: [String] = []
+        for await case .segment(let s) in events where s.isFinal { broadcast.append(s.text) }
+        let expected = "The main risk this quarter is the migration to the new Billing-o-matic."
+        #expect(broadcast.contains(expected))
+        #expect(await store.segments(meetingID: session.meetingID).map(\.text).contains(expected))
+    }
+
     @Test func continuesWhenOneSourceFails() async throws {
         let store = MemoryStore()
         let session = MeetingSession(meeting: Meeting(title: "T"), scope: .allApps, environment: environment(store, sources: [FakeAudioSource(.mic), FakeAudioSource(.system, fails: true)]))

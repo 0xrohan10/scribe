@@ -24,6 +24,7 @@ public struct AppSettings: Codable, Sendable, Equatable {
     public var defaultTemplateID: String = SummaryTemplate.general.id
     public var promptWhenMeetingDetected = true
     public var summarizeWhenMeetingEnds = true
+    public var vocabulary = Vocabulary()
 
     public init() {}
 
@@ -41,6 +42,7 @@ public struct AppSettings: Codable, Sendable, Equatable {
         defaultTemplateID = try c.decodeIfPresent(String.self, forKey: .defaultTemplateID) ?? d.defaultTemplateID
         promptWhenMeetingDetected = try c.decodeIfPresent(Bool.self, forKey: .promptWhenMeetingDetected) ?? d.promptWhenMeetingDetected
         summarizeWhenMeetingEnds = try c.decodeIfPresent(Bool.self, forKey: .summarizeWhenMeetingEnds) ?? d.summarizeWhenMeetingEnds
+        vocabulary = try c.decodeIfPresent(Vocabulary.self, forKey: .vocabulary) ?? d.vocabulary
     }
 
     /// Everything a provider factory needs: the Keychain key plus any model/base-URL overrides.
@@ -48,7 +50,8 @@ public struct AppSettings: Codable, Sendable, Equatable {
         ProviderConfig(
             apiKey: secrets.secret(for: descriptor.secretKey),
             model: models[descriptor.id].flatMap { $0.isEmpty ? nil : $0 } ?? descriptor.defaultModel,
-            baseURL: baseURLs[descriptor.id] ?? descriptor.defaultBaseURL)
+            baseURL: baseURLs[descriptor.id] ?? descriptor.defaultBaseURL,
+            vocabulary: vocabulary.terms)
     }
 }
 

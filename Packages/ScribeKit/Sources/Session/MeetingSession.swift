@@ -38,6 +38,8 @@ public struct SessionEnvironment: Sendable {
     public var notes: any NoteRepository
     public var summaries: any SummaryRepository
     public var audioFiles: any AudioFileStore
+    /// Corrections applied to every segment as it arrives.
+    public var vocabulary: Vocabulary
     /// How long `stop()` waits for transcribers to flush their last segments.
     public var drainTimeout: Duration
 
@@ -50,6 +52,7 @@ public struct SessionEnvironment: Sendable {
         notes: any NoteRepository,
         summaries: any SummaryRepository,
         audioFiles: any AudioFileStore,
+        vocabulary: Vocabulary = Vocabulary(),
         drainTimeout: Duration = .seconds(15)
     ) {
         self.makeSources = makeSources
@@ -60,6 +63,7 @@ public struct SessionEnvironment: Sendable {
         self.notes = notes
         self.summaries = summaries
         self.audioFiles = audioFiles
+        self.vocabulary = vocabulary
         self.drainTimeout = drainTimeout
     }
 }
@@ -210,6 +214,8 @@ public actor MeetingSession {
     }
 
     private func receive(_ segment: TranscriptSegment) async {
+        var segment = segment
+        segment.text = env.vocabulary.correct(segment.text)
         transcript.upsert(segment)
         broadcaster.send(.segment(segment))
         guard segment.isFinal else { return }
