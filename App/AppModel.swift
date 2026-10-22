@@ -13,6 +13,8 @@ import Transcription
 /// What the main window shows beside the sidebar.
 enum Route: Hashable {
     case library
+    case libraryQuestions
+    case todos
     case meeting
     case settings
 }
@@ -20,6 +22,7 @@ enum Route: Hashable {
 /// Whether the selected transcriber can record yet. Local models download and compile before their first meeting.
 enum TranscriberStatus: Equatable {
     case ready
+    case notDownloaded
     case preparing
     case failed(String)
 }
@@ -43,9 +46,13 @@ final class AppModel {
     private(set) var recentMeetings: [Meeting] = []
     var lastError: String?
     private(set) var transcriberStatus = TranscriberStatus.ready
+    private(set) var localModelStatus: LocalModelStatus?
+    private(set) var isDeletingModel = false
 
     let secrets: any SecretStore
     let library: LibraryModel
+    let todos: TodosModel
+    let libraryQuestions = LibraryQuestionsModel()
     @ObservationIgnored private let settingsStore: SettingsStore
     @ObservationIgnored private let database: ScribeDatabase
     @ObservationIgnored private let audioFiles: DiskAudioFileStore
@@ -59,6 +66,7 @@ final class AppModel {
     @ObservationIgnored private var requestSystemAudio: @Sendable () async -> Bool = { await SystemAudioPermission.request() }
     @ObservationIgnored private var llmOverride: (any LLMProvider)?
     @ObservationIgnored private var preparing: Task<Void, Never>?
+    @ObservationIgnored private var modelLoading: Task<Void, Never>?
 
     var isRecording: Bool { current?.isRecording == true }
     var isCapturing: Bool { current?.isCapturing == true }
@@ -76,6 +84,7 @@ final class AppModel {
             lastError = "Couldn't open the database, so nothing will be saved: \(error.localizedDescription)"
         }
         library = LibraryModel(repository: database.library)
+        todos = TodosModel(repository: database.todos)
 
         prompter.onRecord = { [weak self] in self?.startMeeting(from: self?.detectedMeeting) }
         prompter.onStop = { [weak self] in Task { await self?.current?.stop() } }
@@ -93,6 +102,7 @@ final class AppModel {
         self.settings = settings
         self.database = database
         library = LibraryModel(repository: database.library)
+        todos = TodosModel(repository: database.todos)
         audioFiles = DiskAudioFileStore(root: URL.temporaryDirectory.appending(path: "scribe-preview"))
     }
 
@@ -180,6 +190,12 @@ final class AppModel {
         let alert = NSAlert()
         switch transcriberStatus {
         case .ready: return
+        case .notDownloaded:
+            alert.messageText = "Download the transcription model?"
+            alert.informativeText = "The model must be downloaded and loaded before recording. You can see its progress in Settings."
+            alert.addButton(withTitle: "Download")
+            alert.addButton(withTitle: "Cancel")
+            if alert.runModal() == .alertFirstButtonReturn { retryModel(); showSettings() }
         case .preparing:
             alert.messageText = "The transcription model is still loading"
             alert.informativeText = "Scribe is downloading and preparing it so nothing you say is lost. Try again in a minute."
@@ -190,7 +206,7 @@ final class AppModel {
             alert.informativeText = message
             alert.addButton(withTitle: "Retry")
             alert.addButton(withTitle: "Cancel")
-            if alert.runModal() == .alertFirstButtonReturn { prepareTranscriber() }
+            if alert.runModal() == .alertFirstButtonReturn { retryModel() }
         }
     }
 
@@ -215,13 +231,13 @@ final class AppModel {
                 transcriber: transcriber,
                 summarizer: settings.summarizeWhenMeetingEnds ? llm.map(makeSummarizer) : nil,
                 meetings: database.meetings, transcripts: database.transcripts, notes: database.notes,
-                summaries: database.summaries, audioFiles: audioFiles, vocabulary: settings.vocabulary)
+                summaries: database.summaries, vocabulary: settings.vocabulary)
             let session = MeetingSession(meeting: meeting, scope: systemAudioScope(for: detected), environment: environment)
             let vm = MeetingViewModel(
                 meeting: meeting, session: session,
                 notes: NotesController(meetingID: meeting.id, clock: session.clock, repository: database.notes),
                 qa: llm.map(makeQA), summarizer: llm.map(makeSummarizer),
-                summaries: database.summaries, onFinish: { [weak self] in Task { await self?.refreshRecent() } })
+                summaries: database.summaries, transcripts: database.transcripts, learn: learnCorrection, onFinish: { [weak self] in Task { await self?.refreshRecent() } })
             current = vm
             show(vm)
             Task {
@@ -260,6 +276,52 @@ final class AppModel {
         showWindow()
     }
 
+    func showLibraryQuestions() {
+        route = .libraryQuestions
+        showWindow()
+    }
+
+    func showTodos() {
+        route = .todos
+        showWindow()
+    }
+
+    func openTodoSource(_ item: TodoItem) {
+        guard let id = item.meetingID else { return }
+        Task {
+            do {
+                guard let meeting = try await database.meetings.meeting(id: id) else {
+                    todos.lastError = "That meeting has been deleted. The todo is still saved."
+                    await todos.reload()
+                    return
+                }
+                openPast(meeting)
+            } catch { todos.lastError = error.localizedDescription }
+        }
+    }
+
+    func askMeetings(_ question: String) {
+        libraryQuestions.ask(question) {
+            let llm = try llmOverride ?? makeProvider(Providers.llm, id: settings.llmProviderID)
+            return MeetingLibraryQA(llm: llm, search: database.meetingSearch, vocabulary: settings.vocabulary.terms)
+        }
+    }
+
+    func openEvidence(_ source: MeetingEvidence) {
+        libraryQuestions.sourceError = nil
+        Task {
+            do {
+                guard let meeting = try await database.meetings.meeting(id: source.meeting.id) else {
+                    libraryQuestions.sourceError = "That meeting has been deleted."
+                    return
+                }
+                openPast(meeting)
+            } catch {
+                libraryQuestions.sourceError = "Couldn't open the source: \(error.localizedDescription)"
+            }
+        }
+    }
+
     private func show(_ vm: MeetingViewModel) {
         shown = vm
         route = .meeting
@@ -276,7 +338,7 @@ final class AppModel {
                 let llm = makeLLM()
                 let vm = try await MeetingViewModel.review(
                     meeting, transcripts: database.transcripts, noteRepository: database.notes, summaries: database.summaries,
-                    qa: llm.map(makeQA), summarizer: llm.map(makeSummarizer))
+                    qa: llm.map(makeQA), summarizer: llm.map(makeSummarizer), learn: learnCorrection)
                 if !isCapturing { current = vm }
                 show(vm)
             } catch {
@@ -291,7 +353,7 @@ final class AppModel {
         NSApp.activate()
         let alert = NSAlert()
         alert.messageText = "Delete “\(meeting.title)”?"
-        alert.informativeText = "This deletes the transcript, notes, summary and audio recordings. It can't be undone."
+        alert.informativeText = "This deletes the transcript, notes, summary and any old audio recordings. Todos are kept without a meeting link. It can't be undone."
         alert.alertStyle = .warning
         alert.addButton(withTitle: "Delete").hasDestructiveAction = true
         alert.addButton(withTitle: "Cancel")
@@ -316,6 +378,7 @@ final class AppModel {
     func refreshRecent() async {
         recentMeetings = (try? await database.meetings.recent(limit: 15)) ?? []
         await library.reload()
+        await todos.reload()
     }
 
     // MARK: Helpers
@@ -325,23 +388,96 @@ final class AppModel {
         return try registry.make(id: id, config: settings.config(for: descriptor, secrets: secrets))
     }
 
-    /// Loads a local model in the background. Recording waits for it, since audio captured before it's ready would be lost.
-    private func prepareTranscriber() {
+    /// Loads cached models on launch; missing models wait for an explicit download request.
+    private func prepareTranscriber(download: Bool = false) {
         preparing?.cancel()
-        guard let id = settings.transcriptionProviderID, let transcriber = try? makeProvider(Providers.transcription, id: id) else {
+        modelLoading?.cancel()
+        localModelStatus = nil
+        guard let id = settings.transcriptionProviderID else {
             transcriberStatus = .ready
             return
         }
         transcriberStatus = .preparing
-        preparing = Task {
+        let transcriber: any TranscriptionProvider
+        do {
+            transcriber = try makeProvider(Providers.transcription, id: id)
+        } catch {
+            transcriberStatus = .failed(error.localizedDescription)
+            return
+        }
+        preparing = Task { [weak self] in
             do {
-                try await transcriber.prepare()
-                guard !Task.isCancelled else { return }
-                transcriberStatus = .ready
+                if let managed = transcriber as? any LocalModelProvider {
+                    let updates = try await managed.modelUpdates()
+                    var first = true
+                    for await status in updates {
+                        guard !Task.isCancelled, let self else { return }
+                        self.localModelStatus = status
+                        switch status.phase {
+                        case .ready: self.transcriberStatus = .ready
+                        case .notDownloaded, .downloaded: self.transcriberStatus = .notDownloaded
+                        case .downloading, .loading, .deleting: self.transcriberStatus = .preparing
+                        case .failed(let message): self.transcriberStatus = .failed(message)
+                        }
+                        if first {
+                            first = false
+                            if status.phase != .ready, download || status.cachedBytes > 0 {
+                                self.transcriberStatus = .preparing
+                                self.modelLoading = Task {
+                                    // ModelCache broadcasts errors and shares any existing load.
+                                    do { try await managed.prepare() } catch {}
+                                }
+                            }
+                        }
+                    }
+                } else {
+                    try await transcriber.prepare()
+                    guard !Task.isCancelled else { return }
+                    self?.transcriberStatus = .ready
+                }
             } catch {
                 guard !Task.isCancelled else { return }
-                transcriberStatus = .failed(error.localizedDescription)
+                self?.transcriberStatus = .failed(error.localizedDescription)
             }
+        }
+    }
+
+    func retryModel() {
+        guard !isCapturing, !isDeletingModel else { return }
+        prepareTranscriber(download: true)
+    }
+
+    var canDeleteModel: Bool {
+        guard !isCapturing, !isDeletingModel, transcriberStatus != .preparing,
+              let status = localModelStatus, status.cachedBytes > 0 else { return false }
+        switch status.phase {
+        case .downloading, .loading, .deleting: return false
+        default: return true
+        }
+    }
+
+    func deleteModel() async {
+        guard canDeleteModel, let id = settings.transcriptionProviderID else { return }
+        let alert = NSAlert()
+        alert.messageText = "Delete the cached transcription model?"
+        alert.informativeText = "Recordings and transcripts are not affected. Download the model again before using it."
+        if id == "cohere-transcribe" {
+            alert.informativeText += " Cohere's Hugging Face cache can also be used by other apps."
+        }
+        alert.addButton(withTitle: "Delete Model").hasDestructiveAction = true
+        alert.addButton(withTitle: "Cancel")
+        guard alert.runModal() == .alertFirstButtonReturn, canDeleteModel, settings.transcriptionProviderID == id else { return }
+        isDeletingModel = true
+        transcriberStatus = .preparing
+        defer { isDeletingModel = false }
+        do {
+            let provider = try makeProvider(Providers.transcription, id: id)
+            guard let managed = provider as? any LocalModelProvider else { return }
+            try await managed.deleteModel()
+        } catch {
+            transcriberStatus = .failed(error.localizedDescription)
+            localModelStatus = LocalModelStatus(phase: .failed(error.localizedDescription), cachedBytes: localModelStatus?.cachedBytes ?? 0)
+            lastError = "Couldn't delete model: \(error.localizedDescription)"
         }
     }
 
@@ -354,6 +490,11 @@ final class AppModel {
         let webSearch = settings.webSearchProviderID.flatMap { try? makeProvider(Providers.webSearch, id: $0) }
         let searchGate = settings.searchGateProviderID.flatMap { try? makeProvider(Providers.searchGate, id: $0) }
         return QAEngine(llm: llm, webSearch: webSearch, searchGate: searchGate, vocabulary: settings.vocabulary.terms)
+    }
+
+    /// Corrections made in a meeting's chat land in Settings ▸ Vocabulary.
+    private func learnCorrection(term: String, heardAs: String) throws -> VocabularyEntry {
+        try settings.vocabulary.learn(term, heardAs: heardAs)
     }
 
     private func makeSummarizer(_ llm: any LLMProvider) -> LLMSummarizer {

@@ -27,6 +27,8 @@ public final class ScribeDatabase: Sendable {
     public var notes: some NoteRepository { GRDBNoteRepository(writer: writer) }
     public var summaries: some SummaryRepository { GRDBSummaryRepository(writer: writer) }
     public var library: some LibraryRepository { GRDBLibraryRepository(writer: writer) }
+    public var meetingSearch: some MeetingSearchRepository { GRDBMeetingSearchRepository(writer: writer) }
+    public var todos: some TodoRepository { GRDBTodoRepository(writer: writer) }
 
     static var migrator: DatabaseMigrator {
         var migrator = DatabaseMigrator()
@@ -81,6 +83,28 @@ public final class ScribeDatabase: Sendable {
                 t.primaryKey(["meetingID", "name"])
             }
             try db.create(index: "meetingTag_on_name", on: "meetingTag", columns: ["name"])
+        }
+        migrator.registerMigration("v3-todos") { db in
+            try db.create(table: "todo") { t in
+                t.primaryKey("id", .blob)
+                t.column("title", .text).notNull()
+                t.column("notes", .text).notNull()
+                t.column("owner", .text)
+                t.column("dueDate", .datetime)
+                t.column("suggestedDue", .text)
+                t.column("completedAt", .datetime)
+                t.column("createdAt", .datetime).notNull()
+                t.column("meetingID", .blob).indexed().references("meeting", onDelete: .setNull)
+                t.column("meetingTitle", .text)
+            }
+            try db.create(table: "todoImport") { t in
+                t.primaryKey("sourceKey", .text)
+                t.column("todoID", .blob).references("todo", onDelete: .setNull)
+            }
+            // A malformed old summary must not prevent the database from opening.
+            for row in try Row.fetchAll(db, sql: "SELECT * FROM summary") {
+                if let summary = try? SummaryRecord(row: row).payload { try importTodos(from: summary, in: db) }
+            }
         }
         return migrator
     }

@@ -18,12 +18,14 @@ public enum VocabularyError: Error, LocalizedError, Equatable {
     case empty
     case tooLong
     case duplicate(String)
+    case unchanged(String)
 
     public var errorDescription: String? {
         switch self {
         case .empty: "Enter a word or phrase."
         case .tooLong: "Keep it under \(Vocabulary.maxLength) characters."
         case .duplicate(let term): "“\(term)” is already in your vocabulary."
+        case .unchanged(let term): "“\(term)” is already spelled that way."
         }
     }
 }
@@ -54,6 +56,25 @@ public struct Vocabulary: Sendable, Equatable, Codable {
             throw VocabularyError.duplicate(entry.term)
         }
         return entry
+    }
+
+    /// Saves a correction the user asked for in chat. One already saved for `heardAs` now points at `term`; a saved
+    /// `term` without a correction gets this one; otherwise it's a new entry, even if `term` has another correction.
+    @discardableResult
+    public mutating func learn(_ term: String, heardAs: String) throws -> VocabularyEntry {
+        let term = try Self.clean(term)
+        let heardAs = try Self.clean(heardAs)
+        guard heardAs != term else { throw VocabularyError.unchanged(term) }
+        let i =
+            entries.firstIndex { $0.heardAs.map(Self.key) == Self.key(heardAs) }
+            ?? entries.firstIndex { $0.heardAs == nil && $0.term.lowercased() == term.lowercased() }
+        guard let i else {
+            entries.append(VocabularyEntry(term: term, heardAs: heardAs))
+            return entries[entries.count - 1]
+        }
+        entries[i].term = term
+        entries[i].heardAs = heardAs
+        return entries[i]
     }
 
     private static func clean(_ text: String) throws -> String {

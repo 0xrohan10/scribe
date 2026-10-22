@@ -64,6 +64,7 @@ struct GRDBSummaryRepository: SummaryRepository {
     func save(_ summary: MeetingSummary) async throws {
         try await writer.write { db in
             try SummaryRecord(meetingID: summary.meetingID, payload: summary, createdAt: summary.createdAt).save(db)
+            try importTodos(from: summary, in: db)
         }
     }
 

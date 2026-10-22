@@ -34,6 +34,10 @@ struct MainView: View {
             switch app.route {
             case .library:
                 LibraryView(app: app, library: app.library).transition(.opacity)
+            case .libraryQuestions:
+                LibraryQuestionsView(app: app, model: app.libraryQuestions).transition(.opacity)
+            case .todos:
+                TodosView(app: app, model: app.todos).transition(.opacity)
             case .meeting:
                 if let vm = app.shown {
                     MeetingView(vm: vm, app: app).id(vm.id).transition(.opacity)
@@ -72,6 +76,10 @@ struct Sidebar: View {
                 VStack(alignment: .leading, spacing: 1) {
                     row("Meetings", icon: "tray.full", count: library.entries.count, filter: .all)
                         .accessibilityIdentifier("sidebar.all")
+                    SidebarRow(title: "Todos", icon: "checklist", count: app.todos.openCount, isSelected: app.route == .todos) { app.showTodos() }
+                        .accessibilityIdentifier("sidebar.todos")
+                    SidebarRow(title: "Ask your meetings", icon: "text.bubble", isSelected: app.route == .libraryQuestions) { app.showLibraryQuestions() }
+                        .accessibilityIdentifier("sidebar.askMeetings")
                     row("Unfiled", icon: "tray", filter: .unfiled)
                         .dropDestination(for: String.self, action: { ids, _ in file(ids, into: nil) }, isTargeted: targeting(.unfiled))
 

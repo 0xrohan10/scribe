@@ -10,10 +10,26 @@ struct MeetingView: View {
     let app: AppModel
     @State private var showSummary = true
     @State private var showPanel = true
+    @State private var newTodo: TodoItem?
 
     var body: some View {
         VStack(spacing: 0) {
             header
+            if vm.isCapturing, !vm.transcriptionStatuses.isEmpty {
+                HStack(spacing: 18) {
+                    ForEach(AudioChunk.Source.allCases, id: \.self) { source in
+                        if let status = vm.transcriptionStatuses[source] {
+                            TranscriptionSourceStatus(source: source, status: status) {
+                                Task { await vm.retryTranscription(source) }
+                            }
+                            .disabled(!vm.isRecording)
+                        }
+                    }
+                    Spacer(minLength: 0)
+                }
+                .padding(.horizontal, 28)
+                .padding(.bottom, 12)
+            }
             if !vm.warnings.isEmpty {
                 warnings.transition(.move(edge: .top).combined(with: .opacity))
             }
@@ -30,6 +46,7 @@ struct MeetingView: View {
         }
         .motion(value: showPanel)
         .motion(Motion.quick, value: vm.warnings)
+        .sheet(item: $newTodo) { TodoEditor(item: $0, model: app.todos) }
     }
 
     private var hasSummary: Bool { vm.summary != nil || vm.state == .summarizing || vm.isRegenerating }
@@ -85,8 +102,10 @@ struct MeetingView: View {
                     .keyboardShortcut(".", modifiers: .command)
                     .accessibilityIdentifier("meeting.stop")
                     .transition(.rise)
-            } else if vm.state == .finished {
-                Button(vm.summary == nil ? "Summarize" : "Regenerate", systemImage: "sparkles") { Task { await vm.regenerateSummary() } }
+            } else if vm.state == .finished || isFailed {
+                Button(vm.summary == nil ? "Summarize" : "Regenerate", systemImage: "sparkles") {
+                    Task { await vm.regenerateSummary(); await app.todos.reload() }
+                }
                     .buttonStyle(QuietButtonStyle())
                     .disabled(vm.isRegenerating || vm.transcript.isEmpty)
                     .accessibilityIdentifier("meeting.summarize")
@@ -98,6 +117,16 @@ struct MeetingView: View {
                     .help("Delete this meeting and its recordings")
                     .accessibilityIdentifier("meeting.delete")
             }
+            if vm.state == .recording || vm.state == .finished {
+                Button("Add a todo from this meeting", systemImage: "plus.circle") {
+                    app.todos.lastError = nil
+                    newTodo = TodoItem(title: "", owner: "Me", meetingID: vm.meeting.id, meetingTitle: vm.meeting.title)
+                }
+                .labelStyle(.iconOnly)
+                .buttonStyle(QuietButtonStyle())
+                .help("Add a todo linked to this meeting")
+                .accessibilityIdentifier("meeting.addTodo")
+            }
             Button(showPanel ? "Hide Notes and Questions" : "Show Notes and Questions", systemImage: "sidebar.right") { showPanel.toggle() }
                 .labelStyle(.iconOnly)
                 .buttonStyle(QuietButtonStyle())
@@ -105,6 +134,11 @@ struct MeetingView: View {
                 .accessibilityIdentifier("meeting.panel")
         }
         .motion(Motion.quick, value: vm.state)
+    }
+
+    private var isFailed: Bool {
+        if case .failed = vm.state { return true }
+        return false
     }
 
     private var warnings: some View {
@@ -134,7 +168,12 @@ struct MeetingView: View {
             }
             ZStack {
                 if hasSummary && showSummary {
-                    SummaryView(summary: vm.summary, isLoading: vm.state == .summarizing || vm.isRegenerating).transition(.rise)
+                    SummaryView(
+                        summary: vm.summary, isLoading: vm.state == .summarizing || vm.isRegenerating,
+                        fix: vm.canCorrect ? { term in Task { await vm.fix(term) } } : nil,
+                        dismiss: { term in Task { await vm.dismiss(term) } }
+                    )
+                    .transition(.rise)
                 } else {
                     TranscriptView(vm: vm).transition(.rise)
                 }
@@ -155,6 +194,56 @@ struct MeetingView: View {
         }
         .frame(maxWidth: .infinity)
         .motion(value: [hasSummary, showSummary])
+    }
+}
+
+private struct TranscriptionSourceStatus: View {
+    let source: AudioChunk.Source
+    let status: TranscriptionStatus
+    let retry: () -> Void
+
+    var body: some View {
+        HStack(spacing: 6) {
+            Image(systemName: source == .mic ? "mic" : "speaker.wave.2")
+            Text("\(source == .mic ? "Microphone" : "System audio"): \(title)")
+                .accessibilityIdentifier("transcription.status.\(source.rawValue)")
+            if case .failed = status {
+                Button("Retry", action: retry)
+                    .buttonStyle(.borderless)
+                    .accessibilityIdentifier("transcription.retry.\(source.rawValue)")
+            }
+        }
+        .font(.system(size: 12))
+        .foregroundStyle(color)
+        .help(detail)
+    }
+
+    private var title: String {
+        switch status {
+        case .waitingForAudio: "Waiting for audio"
+        case .listening: "Listening"
+        case .transcribing: "Transcribing"
+        case .retrying(let attempt, _): "Retrying (\(attempt))…"
+        case .failed: "Transcription failed"
+        case .unavailable: "Unavailable"
+        case .stopped: "Stopped"
+        }
+    }
+
+    private var detail: String {
+        switch status {
+        case .retrying(_, let reason), .failed(let reason), .unavailable(let reason): reason
+        default: title
+        }
+    }
+
+    private var color: Color {
+        switch status {
+        case .transcribing: Theme.highlight
+        case .retrying: Theme.flag
+        case .failed, .unavailable: Theme.recording
+        default: Theme.secondary
+        }
     }
 }
 

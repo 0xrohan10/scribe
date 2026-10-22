@@ -14,6 +14,29 @@ public struct LLMMessage: Sendable, Hashable, Codable {
 public enum LLMTool: Sendable, Hashable {
     /// Provider-hosted web search (e.g. Anthropic's server tool). Only sent to providers that advertise it.
     case webSearch(maxUses: Int)
+    /// A tool the caller runs. The model answers with `LLMDelta.toolCall`; every parameter is a required string.
+    case function(name: String, description: String, parameters: [LLMToolParameter])
+}
+
+public struct LLMToolParameter: Sendable, Hashable {
+    public var name: String
+    public var description: String
+
+    public init(_ name: String, description: String) {
+        self.name = name
+        self.description = description
+    }
+}
+
+public struct LLMToolCall: Sendable, Hashable {
+    public var name: String
+    /// The string arguments; anything else the model sent is dropped.
+    public var arguments: [String: String]
+
+    public init(name: String, arguments: [String: String]) {
+        self.name = name
+        self.arguments = arguments
+    }
 }
 
 public struct ModelParams: Sendable, Hashable {
@@ -58,6 +81,8 @@ public enum LLMDelta: Sendable, Hashable {
     /// Human-readable progress such as "Searching the web…".
     case activity(String)
     case sources([WebSource])
+    /// The model wants a `.function` tool run. It arrives whole, once its arguments have finished streaming.
+    case toolCall(LLMToolCall)
     case done(stopReason: String?)
 }
 

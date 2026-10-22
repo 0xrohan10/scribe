@@ -1,6 +1,6 @@
 # Scribe
 
-A macOS meeting-notes app. It records your mic and the meeting's system audio on the device (no bot joins the call), transcribes live, answers questions mid-meeting, keeps timestamped notes, and summarizes when the meeting ends.
+A macOS meeting-notes app. It captures your mic and the meeting's system audio on the device (no bot joins the call), transcribes live, answers questions mid-meeting, keeps timestamped notes, and summarizes when the meeting ends. Meeting audio is not saved; only transcripts, notes, and summaries are kept.
 
 macOS 14.2+ (Core Audio process taps). On-device transcription with `SpeechAnalyzer` needs macOS 26.
 
@@ -13,7 +13,7 @@ Packages/ScribeKit/       one SwiftPM target per domain; domains import only Cor
   Core/                   models, provider + repository protocols, SessionClock, Broadcaster
   Capture/                MicrophoneSource (AVAudioEngine), SystemAudioSource (process tap + aggregate device), m4a writing
   Detection/              mic-in-use listener, Zoom (CptHost) / Teams / Meet (AX window titles) probes, MicTriggeredMeetingDetector
-  Transcription/          Fake, SpeechAnalyzer, WhisperKit; Deepgram / AssemblyAI / OpenAI Realtime are TODO stubs
+  Transcription/          Fake, SpeechAnalyzer, WhisperKit, Cohere (MLX); Deepgram / AssemblyAI / OpenAI Realtime are TODO stubs
   Intelligence/           Anthropic (streaming + server web search), OpenAI-compatible, Parallel web search, Jev search gate, QAEngine, LLMSummarizer, prompts
   Notes/                  NotesController, NoteDraft (anchors to when you *start* typing), NoteAnchoring
   Session/                MeetingSession: lifecycle state machine, per-source transcription, persistence fan-out
@@ -25,7 +25,7 @@ Packages/ScribeKit/       one SwiftPM target per domain; domains import only Cor
 project.yml               XcodeGen spec for Scribe.xcodeproj
 ```
 
-Data flow: each `AudioSource` writes its own `mic.m4a` or `system.m4a` and streams 16 kHz mono `AudioChunk`s into its own `transcribe` call. Mic is "Me" and system audio is "Them", so no diarization is needed. `MeetingSession` merges the segments, broadcasts `SessionEvent`s to the UI and saves final segments.
+Data flow: each `AudioSource` streams 16 kHz mono `AudioChunk`s into its own `transcribe` call, without a recording file. Mic is "Me" and system audio is "Them", so no diarization is needed. `MeetingSession` merges the segments, broadcasts `SessionEvent`s to the UI and saves final segments. When both tracks are available, signal-based echo detection filters microphone segments explained by delayed speaker audio. Local speech over the other side is retained. The detector is adapted from [Hex](https://github.com/anomalyco/hex); see [third-party notices](THIRD_PARTY_NOTICES.md).
 
 ## Develop
 
@@ -80,6 +80,48 @@ cd Packages/ScribeKit && swift run scribe-tapcheck --bundle com.google.Chrome --
 ```
 
 Leave out `--bundle` to tap all apps, or use `--bundle us.zoom.xos` for Zoom. The tool prints per-second levels and writes `tapcheck-system.m4a`. If every level reads as silence, the System Audio Recording permission was denied for your terminal.
+
+## Local Cohere Transcribe
+
+Select **Settings ▸ Transcription ▸ Provider ▸ Cohere Transcribe (on-device)**, then **Download Model**. It needs an Apple Silicon Mac. Scribe downloads the [MLX checkpoint](https://huggingface.co/beshkenadze/cohere-transcribe-03-2026-mlx-fp16) and reuses the cached weights. Allow several GB of disk space and memory for this 2B-parameter model. Wait for **Ready** before recording.
+
+Transcription runs in the app through [MLX Audio Swift](https://github.com/Blaizzy/mlx-audio-swift), without Python, a server, or an API key. After the download, audio transcription works offline. Q&A and summaries still use the selected AI provider. The default language is English. Transcript updates use short audio windows, with final segments on pauses or after 25 seconds of continuous speech. Custom vocabulary is not passed to the model; Scribe's transcript corrections still apply.
+
+The Model field accepts compatible Cohere Transcribe MLX checkpoint repository IDs, not the original PyTorch weights. Building this provider needs Swift 6.3 or later and Xcode's Metal toolchain (`xcodebuild -downloadComponent MetalToolchain`).
+
+### Manage local models
+
+Use the **Model** dropdown for the known Cohere and Whisper checkpoints. This list works offline. Choose **Custom…** only when you need to enter another checkpoint ID; existing custom selections are kept.
+
+Settings shows the selected Cohere or Whisper model's download progress, loading state, errors, and cached file size. Percentages use the provider's download work units, which can be files rather than bytes. Use **Retry** after a failure or **Delete Model…** to remove its cached files and unload it. Deletion is disabled while a model loads or a meeting captures audio. Meeting data is not deleted.
+
+Missing models wait for **Download Model** (or the download prompt when starting a recording). Cached models load when selected or when Scribe starts. A deleted model does not download again on launch. Cohere uses the shared Hugging Face cache; its delete confirmation notes that other apps can use the same files. Whisper deletion affects only the selected variant, not other cached variants.
+
+## Todos
+
+Choose **Todos** in the sidebar to manage tasks without starting a meeting. Add a title for quick capture, click a task to edit its owner, notes, and due date, and use the circle to complete or reopen it. **Open**, **Today**, and **Completed** provide separate views. Today includes overdue tasks. Search matches task text, owners, and meeting titles.
+
+Meeting summary action items are added automatically, including actions from summaries saved before this version. Use the plus button in a live or finished meeting to add a linked todo yourself. Source links open the original meeting. Deleting a meeting keeps its todos, with the old meeting title but no live link.
+
+Imported tasks become user-owned. Summary regeneration does not overwrite edits or completion, and deleted imports do not return. Matching uses the meeting, task wording, and owner, ignoring case and repeated whitespace; differently worded actions can be new tasks. Manually added meeting tasks use the same matching rule. Completion does not rewrite the historical summary.
+
+Exact `YYYY-MM-DD` dates become due dates. Other wording, such as “Friday” or “next week”, stays as an unconfirmed suggestion until you choose a date. Unconfirmed suggestions are not treated as overdue. Todos are stored locally in SQLite. No extra AI requests or audio storage are needed.
+
+## Ask across saved meetings
+
+Choose **Ask your meetings** in the sidebar to ask about decisions, owners, or discussions across all saved transcripts, notes, and summaries. This searches the whole library, independent of the selected folder or tag. Answers stream from the selected AI provider. Expand **Source quotes** to inspect the saved excerpts; click a citation or meeting title to open its meeting.
+
+Search uses keyword matching, with bounded excerpts from several meetings. It does not search audio or the web. Only matching excerpts and conversation context are sent to the configured AI provider. If nothing matches, Scribe returns a local no-results message without an AI request. Corrections and meeting deletions are reflected on the next question. Conversations stay in memory until cleared or Scribe quits.
+
+## Live transcription recovery
+
+Microphone and system audio have separate status labels in the meeting view. If a transcriber throws an error or ends unexpectedly, Scribe restarts that track without ending the meeting or restarting the other track. It also restarts a transcriber after 60 seconds without new results when speech-like audio has been received. Quiet audio alone does not trigger this check.
+
+Scribe makes up to three automatic retries with increasing delays. If they fail, use **Retry** beside the affected track. Existing final text is kept. Partial text is saved as the best available text before a restart. Retries use only the most recent 30 seconds of unconfirmed audio in memory, with no audio files. Older audio outside that buffer cannot be recovered; Scribe warns if it may be missing. Stopping capture cancels pending retries.
+
+## Audio storage
+
+New meetings do not save audio or timing files. There is no playback or retranscription action. Audio recordings from older versions remain untouched; deleting an old meeting still removes its recordings after confirmation. Diagnostic tools such as `scribe-tapcheck` can still write audio when explicitly run.
 
 ## Adding a provider
 
@@ -172,7 +214,7 @@ This build isn't notarized, so it's only for your own Mac. Gatekeeper blocks it 
 
 ## Known gaps / next
 
-- Without headphones, the mic also picks up the other side, so the same speech can appear twice: once as "Me" and once as "Them". Possible fixes: voice processing (AEC) on the input node, or suppressing mic segments that match system audio.
+- Speakerphone echo suppression filters transcript lines. Room acoustics and low-volume local speech can still affect its decisions.
 - The Meet probe only sees each browser window's active tab. A browser-extension `MeetingDetector` is planned.
 - Anthropic `pause_turn`, used for long server-tool turns, isn't continued automatically yet.
 - Long meetings send the most recent ~120k characters of transcript. `TranscriptContextProvider` is the seam for adding chunking or retrieval.

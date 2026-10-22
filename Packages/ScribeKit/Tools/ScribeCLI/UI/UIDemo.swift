@@ -75,6 +75,7 @@ struct UIDemo: AsyncParsableCommand {
             _ = try await waitFor("meeting.state", containing: "Finished", timeout: 20)
             _ = try await waitFor("summary.overview", containing: "(echo)")
             _ = try await waitFor("summary", containing: "billing is the main risk")
+            guard app.all("meeting.retranscribe").isEmpty else { throw UIError("Retranscription action is still present") }
         }
 
         try await step("create a folder from the sidebar") {
@@ -119,7 +120,66 @@ struct UIDemo: AsyncParsableCommand {
             if segments.isEmpty || segments.contains(where: { !$0.isFinal }) { problems.append("\(segments.count) segments, some not final") }
             if summary?.flagged.contains(where: { $0.contains("billing is the main risk") }) != true { problems.append("summary is \(String(describing: summary))") }
             if entry.meeting.endedAt == nil { problems.append("meeting has no end time") }
+            if entry.meeting.micAudioPath != nil || entry.meeting.systemAudioPath != nil { problems.append("meeting retained audio paths") }
             guard problems.isEmpty else { throw UIError(problems.joined(separator: "; ")) }
+        }
+
+        try await step("ask across saved meetings and open a source") {
+            try app.press("sidebar.askMeetings")
+            let field = try await app.wait("the library question field") { app.all("libraryAsk.field").first }
+            try await app.type("What did we decide about billing?", into: field)
+            try app.press("libraryAsk.send")
+            _ = try await waitFor("libraryAsk.answer", containing: "(echo)")
+            let sources = try await app.wait("source quotes") { app.all("libraryAsk.sources").first }
+            try sources.perform(kAXPressAction)
+            let source = try await app.wait("a saved meeting source") { app.all("libraryAsk.source").first }
+            try source.perform(kAXPressAction)
+            _ = try await waitFor("meeting.state", containing: "Finished")
+            try app.press("sidebar.askMeetings")
+            _ = try await waitFor("libraryAsk.answer", containing: "(echo)")
+        }
+
+        try await step("meeting actions and standalone todos work together") {
+            let db = try ScribeDatabase(url: UISession.databaseURL)
+            let meeting = try await db.meetings.recent(limit: 1).first!
+            var summary = try await db.summaries.summary(meetingID: meeting.id)!
+            summary.actionItems.append(.init(task: "Follow up with the vendor", owner: "Me", due: "Friday"))
+            try await db.summaries.save(summary)
+            try app.press("sidebar.todos")
+            _ = try await waitFor("todo.edit", containing: "Follow up with the vendor")
+            let field = try await app.wait("new todo field") { app.all("todo.new").first }
+            try await app.type("Plan my week", into: field)
+            try app.press("todo.add")
+            let added = try await waitFor("todo.edit", containing: "Plan my week")
+            try added.perform(kAXPressAction)
+            let owner = try await app.wait("todo owner field") { app.all("todo.editor.owner").first }
+            try await app.type("Me", into: owner)
+            try app.press("todo.editor.hasDate")
+            try app.press("todo.editor.save")
+            _ = try await app.wait("todo editor to close") { app.all("todo.editor.save").isEmpty ? true : nil }
+            try app.press("Today")
+            _ = try await waitFor("todo.edit", containing: "Plan my week")
+            guard app.all("todo.edit").count == 1 else { throw UIError("An unconfirmed Friday date was treated as due today") }
+            try app.press("Complete Plan my week")
+            try app.press("Completed")
+            _ = try await waitFor("todo.edit", containing: "Plan my week")
+            let saved = try await db.todos.items()
+            guard saved.first(where: { $0.title == "Plan my week" }).map({ $0.isCompleted && $0.owner == "Me" && $0.dueDate != nil && $0.meetingID == nil }) == true else {
+                throw UIError("Standalone todo edits or completion were not saved")
+            }
+            try app.press("Reopen Plan my week")
+            try app.press("Open")
+            let source = try await app.wait("todo source link") { app.all("todo.source").first(where: \.isEnabled) }
+            try source.perform(kAXPressAction)
+            _ = try await waitFor("meeting.state", containing: "Finished")
+            try app.press("meeting.addTodo")
+            let title = try await app.wait("new meeting todo title") { app.all("todo.editor.title").first }
+            try await app.type("Send meeting follow-up", into: title)
+            try app.press("todo.editor.save")
+            _ = try await app.wait("meeting todo editor to close") { app.all("todo.editor.save").isEmpty ? true : nil }
+            guard try await db.todos.items().first(where: { $0.title == "Send meeting follow-up" })?.meetingID == meeting.id else {
+                throw UIError("A todo created in the meeting lost its source link")
+            }
         }
 
         if keepOpen {

@@ -53,6 +53,23 @@ public struct Transcript: Sendable, Equatable {
         segments.insert(segment, at: insertAt)
     }
 
+    /// Removes a provisional segment when later audio identifies it as speaker echo.
+    public mutating func remove(id: UUID) {
+        segments.removeAll { $0.id == id }
+    }
+
+    /// Rewrites every segment with `vocabulary`'s corrections and returns the ones that changed.
+    public mutating func correct(with vocabulary: Vocabulary) -> [TranscriptSegment] {
+        var changed: [TranscriptSegment] = []
+        for i in segments.indices {
+            let text = vocabulary.correct(segments[i].text)
+            guard text != segments[i].text else { continue }
+            segments[i].text = text
+            changed.append(segments[i])
+        }
+        return changed
+    }
+
     public var isEmpty: Bool { segments.isEmpty }
     public var duration: TimeInterval { segments.map(\.end).max() ?? 0 }
 

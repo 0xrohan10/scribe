@@ -73,6 +73,17 @@ extension Array {
     }
 }
 
+@Suite struct MeetingSummaryTests {
+    @Test func decodesSummariesSavedBeforeUncertainTerms() throws {
+        let summary = MeetingSummary(meetingID: UUID(), templateID: "general", overview: "o", uncertainTerms: [UncertainTerm(heard: "a", suggestion: "b")])
+        var json = try JSONSerialization.jsonObject(with: JSONEncoder().encode(summary)) as! [String: Any]
+        #expect(try JSONDecoder().decode(MeetingSummary.self, from: JSONEncoder().encode(summary)) == summary)
+        json["uncertainTerms"] = nil
+        let old = try JSONDecoder().decode(MeetingSummary.self, from: JSONSerialization.data(withJSONObject: json))
+        #expect(old.uncertainTerms.isEmpty && old.overview == "o")
+    }
+}
+
 @Suite struct VocabularyTests {
     private func vocab(_ rules: [(String, String?)]) -> Vocabulary {
         Vocabulary(entries: rules.map { VocabularyEntry(term: $0.0, heardAs: $0.1) })
@@ -113,5 +124,29 @@ extension Array {
         #expect(try v.validated(VocabularyEntry(term: "iPhone", heardAs: "iphone")).heardAs == "iphone")
         // Editing an entry doesn't collide with itself.
         #expect(try v.validated(v.entries[0]).term == "Scribe")
+    }
+
+    @Test func learnFillsInRepointsOrAppends() throws {
+        var v = vocab([("Rohan", nil), ("Scribe", "scribble")])
+        // A saved term without a correction gets it.
+        try v.learn("Rohan", heardAs: " Rowan ")
+        // A saved correction is re-pointed rather than duplicated.
+        try v.learn("Scrybe", heardAs: "Scribble")
+        // A second correction for the same term is its own entry.
+        try v.learn("Rohan", heardAs: "Roan")
+        #expect(v.entries.map(\.term) == ["Rohan", "Scrybe", "Rohan"])
+        #expect(v.entries.map(\.heardAs) == ["Rowan", "Scribble", "Roan"])
+        #expect(throws: VocabularyError.unchanged("Rohan")) { try v.learn("Rohan", heardAs: "Rohan") }
+        #expect(throws: VocabularyError.empty) { try v.learn("Rohan", heardAs: "?") }
+    }
+
+    @Test func transcriptCorrectionReturnsChangedSegments() {
+        var transcript = Transcript(segments: [
+            TranscriptSegment(speaker: .me, text: "Hi, I'm Rowan.", start: 0, end: 1, isFinal: true),
+            TranscriptSegment(speaker: .them, text: "Hi there.", start: 1, end: 2, isFinal: true),
+        ])
+        let changed = transcript.correct(with: vocab([("Rohan", "Rowan")]))
+        #expect(changed.map(\.text) == ["Hi, I'm Rohan."])
+        #expect(transcript.segments.map(\.text) == ["Hi, I'm Rohan.", "Hi there."])
     }
 }

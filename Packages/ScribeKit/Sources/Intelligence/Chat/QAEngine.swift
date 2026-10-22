@@ -57,8 +57,25 @@ public struct QAEngine: Sendable {
         self.vocabulary = vocabulary
     }
 
-    /// - Parameter history: earlier Q&A turns from this meeting, oldest first.
-    public func answer(_ question: String, transcript: Transcript, now: TimeInterval, history: [LLMMessage] = []) -> AsyncThrowingStream<LLMDelta, Error> {
+    /// Fixes a word the transcriber got wrong, e.g. heard "Rowan", correct "Rohan". Returns what to tell the user.
+    public typealias Corrector = @Sendable (_ heard: String, _ correct: String) async throws -> String
+
+    static let correctionTool = LLMTool.function(
+        name: "correct_transcript",
+        description: "Fix a word, name or phrase the transcription keeps getting wrong, when the user says it's misspelled "
+            + "or misheard (e.g. \"it's Rohan, not Rowan\"). Rewrites this meeting's transcript and saves the spelling "
+            + "for future meetings. Call once per correction.",
+        parameters: [
+            LLMToolParameter("heard", description: "The words as the transcript has them, e.g. \"Rowan\"."),
+            LLMToolParameter("correct", description: "How they should be written, e.g. \"Rohan\"."),
+        ])
+
+    /// - Parameters:
+    ///   - history: earlier Q&A turns from this meeting, oldest first.
+    ///   - correct: when set, the model can fix misheard words in the transcript.
+    public func answer(
+        _ question: String, transcript: Transcript, now: TimeInterval, history: [LLMMessage] = [], correct: Corrector? = nil
+    ) -> AsyncThrowingStream<LLMDelta, Error> {
         if let local = RecentSpeechAnswerer.answer(question, transcript: transcript, now: now, window: recentWindow) {
             return AsyncThrowingStream { continuation in
                 continuation.yield(.text(local))
@@ -88,10 +105,30 @@ public struct QAEngine: Sendable {
                     } else if llm.capabilities.serverWebSearch {
                         tools = [.webSearch(maxUses: 3)]
                     }
+                    if correct != nil { tools.append(Self.correctionTool) }
                     let request = LLMRequest(
                         system: Prompts.qaSystem(transcript: transcriptText, now: now, vocabulary: vocabulary),
                         messages: history + [LLMMessage(role: .user, content: prompt)], tools: tools, params: params)
-                    for try await delta in llm.complete(request) { continuation.yield(delta) }
+                    var wroteText = false
+                    for try await delta in llm.complete(request) {
+                        switch delta {
+                        case .toolCall(let call):
+                            guard let correct, let heard = call.arguments["heard"], let right = call.arguments["correct"] else { continue }
+                            let result: String
+                            do {
+                                result = try await correct(heard, right)
+                            } catch {
+                                result = "Couldn't fix “\(heard)”: \(error.localizedDescription)"
+                            }
+                            continuation.yield(.text((wroteText ? "\n\n" : "") + result))
+                            wroteText = true
+                        case .text:
+                            wroteText = true
+                            continuation.yield(delta)
+                        default:
+                            continuation.yield(delta)
+                        }
+                    }
                     continuation.finish()
                 } catch {
                     continuation.finish(throwing: error)

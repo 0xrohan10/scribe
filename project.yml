@@ -28,6 +28,8 @@ targets:
     platform: macOS
     sources:
       - App
+      - path: THIRD_PARTY_NOTICES.md
+        buildPhase: resources
     info:
       path: App/Info.plist
       properties:

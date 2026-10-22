@@ -1,3 +1,4 @@
+import Core
 import Foundation
 
 public enum LLMError: Error, LocalizedError {
@@ -55,15 +56,16 @@ enum ServerSentEvents {
         }
     }
 
-    /// Runs `decode` over each data line and forwards the deltas.
-    static func deltas<Delta: Sendable>(
-        for request: URLRequest, session: URLSession, decode: @escaping @Sendable (String) throws -> [Delta]
-    ) -> AsyncThrowingStream<Delta, Error> {
+    /// Runs a fresh `Decoder` over each data line and forwards the deltas.
+    static func deltas<Decoder: StreamDecoder>(
+        for request: URLRequest, session: URLSession, decoder: Decoder.Type
+    ) -> AsyncThrowingStream<LLMDelta, Error> {
         AsyncThrowingStream { continuation in
             let task = Task {
                 do {
+                    var decoder = Decoder()
                     for try await data in dataLines(for: request, session: session) {
-                        for delta in try decode(data) { continuation.yield(delta) }
+                        for delta in try decoder.decode(data) { continuation.yield(delta) }
                     }
                     continuation.finish()
                 } catch {
@@ -72,5 +74,30 @@ enum ServerSentEvents {
             }
             continuation.onTermination = { _ in task.cancel() }
         }
+    }
+}
+
+/// Turns one stream's `data:` payloads into deltas. Stateful, since tool-call arguments arrive in pieces.
+protocol StreamDecoder: Sendable {
+    init()
+    mutating func decode(_ data: String) throws -> [LLMDelta]
+}
+
+extension LLMToolCall {
+    /// From streamed JSON arguments. Empty or malformed JSON gives no arguments.
+    init(name: String, json: String) {
+        let object = (try? JSONSerialization.jsonObject(with: Data(json.utf8))) as? [String: Any]
+        self.init(name: name, arguments: object?.compactMapValues { $0 as? String } ?? [:])
+    }
+}
+
+extension [LLMToolParameter] {
+    /// JSON Schema for an object whose properties are these required strings.
+    var jsonSchema: [String: Any] {
+        [
+            "type": "object",
+            "properties": Dictionary(uniqueKeysWithValues: map { ($0.name, ["type": "string", "description": $0.description]) }),
+            "required": map(\.name),
+        ]
     }
 }

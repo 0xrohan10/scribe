@@ -21,6 +21,17 @@ import Testing
         FileManager.default.temporaryDirectory.appending(path: "capture-\(UUID()).m4a")
     }
 
+    @Test func streamsAudioWithoutARecordingFile() async throws {
+        let (stream, continuation) = AsyncStream.makeStream(of: AudioChunk.self)
+        let sink = try CaptureSink(source: .mic, clock: SessionClock(originHostTime: 1_000), recordingTo: nil, continuation: continuation)
+        sink.consume(try stereoBuffer(), hostTime: 1_000)
+        sink.finish()
+        var chunks: [AudioChunk] = []
+        for await chunk in stream { chunks.append(chunk) }
+        #expect(!chunks.isEmpty)
+        #expect(chunks.allSatisfy { $0.source == .mic && $0.sampleRate == 16_000 && !$0.pcm.isEmpty })
+    }
+
     @Test func normalizesTo16kMonoAndWritesRecording() async throws {
         let url = tempURL()
         defer { try? FileManager.default.removeItem(at: url) }

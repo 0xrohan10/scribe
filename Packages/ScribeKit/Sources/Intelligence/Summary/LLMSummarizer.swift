@@ -36,6 +36,7 @@ enum SummaryParser {
         var actionItems: [ActionItem]?
         var openQuestions: [String]?
         var flagged: [String]?
+        var uncertainTerms: [UncertainTerm]?
     }
 
     /// Extracts the JSON object from the model's reply. If there isn't a valid one, the raw text becomes the overview.
@@ -45,7 +46,8 @@ enum SummaryParser {
         {
             return MeetingSummary(
                 meetingID: meetingID, templateID: templateID, overview: payload.overview ?? "", decisions: payload.decisions ?? [],
-                actionItems: payload.actionItems ?? [], openQuestions: payload.openQuestions ?? [], flagged: payload.flagged ?? [])
+                actionItems: payload.actionItems ?? [], openQuestions: payload.openQuestions ?? [], flagged: payload.flagged ?? [],
+                uncertainTerms: (payload.uncertainTerms ?? []).filter { $0.heard != $0.suggestion })
         }
         return MeetingSummary(meetingID: meetingID, templateID: templateID, overview: text.trimmingCharacters(in: .whitespacesAndNewlines))
     }

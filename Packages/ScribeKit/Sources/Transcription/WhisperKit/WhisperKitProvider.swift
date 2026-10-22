@@ -6,7 +6,7 @@ import os
 
 /// On-device Whisper via WhisperKit (Core ML). Downloads the model on first use.
 /// Whisper isn't a streaming model, so each utterance is re-decoded as it grows (partials) and once more when it ends (final).
-public struct WhisperKitProvider: TranscriptionProvider {
+public struct WhisperKitProvider: LocalModelProvider {
     public let id = "whisperkit"
     public let model: String
     public let language: String?
@@ -22,7 +22,15 @@ public struct WhisperKitProvider: TranscriptionProvider {
     public static let defaultModel = "openai_whisper-large-v3-v20240930_turbo_632MB"
 
     public func prepare() async throws {
-        _ = try await WhisperModels.shared.load(model)
+        _ = try await WhisperModels.load(model)
+    }
+
+    public func modelUpdates() async throws -> AsyncStream<LocalModelStatus> {
+        await WhisperModels.cache.updates(model, directories: try WhisperModels.directories(model))
+    }
+
+    public func deleteModel() async throws {
+        try await WhisperModels.cache.delete(model, directories: WhisperModels.directories(model))
     }
 
     public func transcribe(_ audio: AsyncStream<Core.AudioChunk>) -> AsyncThrowingStream<TranscriptSegment, Error> {
@@ -30,7 +38,7 @@ public struct WhisperKitProvider: TranscriptionProvider {
         return AsyncThrowingStream { continuation in
             let task = Task {
                 do {
-                    let whisper = try await WhisperModels.shared.load(model)
+                    let whisper = try await WhisperModels.load(model)
                     let options = DecodingOptions(language: language, skipSpecialTokens: true, withoutTimestamps: true)
                     let glossary = whisper.glossaryTokens(vocabulary)
                     let format = AVAudioFormat(
@@ -204,23 +212,40 @@ struct DecodeQueue {
 
 /// Loaded pipelines, shared across sources and meetings so the model loads once per process.
 /// WhisperKit runs concurrent `transcribe` calls on one instance itself (`concurrentWorkerCount`), so sharing is safe.
-private actor WhisperModels {
-    static let shared = WhisperModels()
-    private var pipelines: [String: Task<LoadedWhisper, Error>] = [:]
+private enum WhisperModels {
+    static let cache = LocalModelCache<LoadedWhisper>()
+    static let root = URL.applicationSupportDirectory.appending(path: "Scribe/WhisperKit", directoryHint: .isDirectory)
 
-    func load(_ model: String) async throws -> LoadedWhisper {
-        if let existing = pipelines[model] { return try await existing.value }
-        let task = Task {
-            let folder = URL.applicationSupportDirectory.appending(path: "Scribe/WhisperKit", directoryHint: .isDirectory)
-            let config = WhisperKitConfig(model: model, downloadBase: folder, verbose: false, load: true, download: true)
+    static func directories(_ model: String) throws -> [URL] {
+        try validateModelName(model, components: 1)
+        let repo = root.appending(path: "models/argmaxinc/whisperkit-coreml")
+        // WhisperKit accepts variants such as "large-v3" as well as full folder names.
+        let folders = (try? FileManager.default.contentsOfDirectory(at: repo, includingPropertiesForKeys: [.isDirectoryKey])) ?? []
+        let matches = folders.filter { $0.lastPathComponent.contains(model) && (try? $0.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) == true }
+        let preferred = matches.count > 1 ? matches.filter { $0.lastPathComponent.contains("openai") } : matches
+        let folder = preferred.count == 1 ? preferred[0] : repo.appending(path: model)
+        return [folder, repo.appending(path: ".cache/huggingface/download/\(folder.lastPathComponent)")]
+    }
+
+    static func load(_ model: String) async throws -> LoadedWhisper {
+        try await Self.cache.load(model, directories: { try Self.directories(model) }) { report in
+            let directory = try Self.directories(model)[0]
+            // A completed model can load offline. Incomplete downloads retry through the downloader.
+            let marker = directory.appending(path: ".scribe-download-complete")
+            let folder: URL
+            if FileManager.default.fileExists(atPath: marker.path) {
+                folder = directory
+            } else {
+                folder = try await WhisperKit.download(variant: model, downloadBase: Self.root) { progress in
+                    report(.downloading(progress.fractionCompleted))
+                }
+                try validateModelName(folder.lastPathComponent, components: 1)
+                guard folder.deletingLastPathComponent().standardizedFileURL == directory.deletingLastPathComponent().standardizedFileURL else { throw LocalModelError.invalidName }
+                try Data().write(to: folder.appending(path: ".scribe-download-complete"), options: .atomic)
+            }
+            report(.loading)
+            let config = WhisperKitConfig(modelFolder: folder.path, verbose: false, load: true, download: false)
             return LoadedWhisper(kit: try await WhisperKit(config))
-        }
-        pipelines[model] = task
-        do {
-            return try await task.value
-        } catch {
-            pipelines[model] = nil
-            throw error
         }
     }
 }

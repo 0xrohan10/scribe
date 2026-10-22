@@ -22,7 +22,7 @@ public struct OpenAICompatibleProvider: LLMProvider {
 
     public func complete(_ req: LLMRequest) -> AsyncThrowingStream<LLMDelta, Error> {
         do {
-            return ServerSentEvents.deltas(for: try urlRequest(req), session: session, decode: OpenAIStreamDecoder.decode)
+            return ServerSentEvents.deltas(for: try urlRequest(req), session: session, decoder: OpenAIStreamDecoder.self)
         } catch {
             return AsyncThrowingStream { $0.finish(throwing: error) }
         }
@@ -50,6 +50,11 @@ public struct OpenAICompatibleProvider: LLMProvider {
             "messages": messages,
         ]
         if let temperature = req.params.temperature { body["temperature"] = temperature }
+        let tools: [[String: Any]] = req.tools.compactMap { tool in
+            guard case .function(let name, let description, let parameters) = tool else { return nil }
+            return ["type": "function", "function": ["name": name, "description": description, "parameters": parameters.jsonSchema]]
+        }
+        if !tools.isEmpty { body["tools"] = tools }
 
         var request = URLRequest(url: baseURL.appending(path: "chat/completions"))
         request.httpMethod = "POST"
@@ -85,7 +90,10 @@ enum OpenAIModelList {
     }
 }
 
-enum OpenAIStreamDecoder {
+struct OpenAIStreamDecoder: StreamDecoder {
+    /// Tool calls whose arguments are still streaming, by index; sent when the choice finishes.
+    private var toolCalls: [Int: (name: String, json: String)] = [:]
+
     private struct Chunk: Decodable {
         /// Absent on error chunks.
         var choices: [Choice]?
@@ -98,6 +106,16 @@ enum OpenAIStreamDecoder {
 
         struct Delta: Decodable {
             var content: String?
+            var toolCalls: [ToolCall]?
+        }
+
+        struct ToolCall: Decodable {
+            var index: Int?
+            var function: Function?
+            struct Function: Decodable {
+                var name: String?
+                var arguments: String?
+            }
         }
 
         struct APIError: Decodable {
@@ -105,14 +123,26 @@ enum OpenAIStreamDecoder {
         }
     }
 
-    static func decode(_ data: String) throws -> [LLMDelta] {
+    init() {}
+
+    mutating func decode(_ data: String) throws -> [LLMDelta] {
         if data == "[DONE]" { return [] }
         let chunk = try ServerSentEvents.snakeCaseDecoder.decode(Chunk.self, from: Data(data.utf8))
         if let error = chunk.error { throw LLMError.api(error.message) }
         guard let choice = chunk.choices?.first else { return [] }
         var deltas: [LLMDelta] = []
         if let text = choice.delta?.content, !text.isEmpty { deltas.append(.text(text)) }
-        if let reason = choice.finishReason { deltas.append(.done(stopReason: reason)) }
+        // The first fragment of each call carries its name; later ones only add to the arguments.
+        for (i, call) in (choice.delta?.toolCalls ?? []).enumerated() {
+            let index = call.index ?? i
+            toolCalls[index, default: ("", "")].name += call.function?.name ?? ""
+            toolCalls[index, default: ("", "")].json += call.function?.arguments ?? ""
+        }
+        if let reason = choice.finishReason {
+            deltas += toolCalls.sorted { $0.key < $1.key }.map { .toolCall(LLMToolCall(name: $0.value.name, json: $0.value.json)) }
+            toolCalls = [:]
+            deltas.append(.done(stopReason: reason))
+        }
         return deltas
     }
 }

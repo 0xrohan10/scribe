@@ -14,6 +14,9 @@ public enum SessionState: Sendable, Equatable {
 public enum SessionEvent: Sendable {
     case state(SessionState)
     case segment(TranscriptSegment)
+    /// A provisional microphone line was identified as speaker echo.
+    case segmentRemoved(UUID)
+    case transcriptionStatus(AudioChunk.Source, TranscriptionStatus)
     case summary(MeetingSummary)
     /// Non-fatal problems, e.g. the system tap failed but the mic is still recording.
     case warning(String)
@@ -37,11 +40,11 @@ public struct SessionEnvironment: Sendable {
     public var transcripts: any TranscriptRepository
     public var notes: any NoteRepository
     public var summaries: any SummaryRepository
-    public var audioFiles: any AudioFileStore
     /// Corrections applied to every segment as it arrives.
     public var vocabulary: Vocabulary
     /// How long `stop()` waits for transcribers to flush their last segments.
     public var drainTimeout: Duration
+    public var recoveryPolicy: TranscriptionRecoveryPolicy
 
     public init(
         makeSources: @escaping @Sendable (SystemAudioScope) -> [any AudioSource],
@@ -51,9 +54,9 @@ public struct SessionEnvironment: Sendable {
         transcripts: any TranscriptRepository,
         notes: any NoteRepository,
         summaries: any SummaryRepository,
-        audioFiles: any AudioFileStore,
         vocabulary: Vocabulary = Vocabulary(),
-        drainTimeout: Duration = .seconds(15)
+        drainTimeout: Duration = .seconds(15),
+        recoveryPolicy: TranscriptionRecoveryPolicy = TranscriptionRecoveryPolicy()
     ) {
         self.makeSources = makeSources
         self.transcriber = transcriber
@@ -62,9 +65,9 @@ public struct SessionEnvironment: Sendable {
         self.transcripts = transcripts
         self.notes = notes
         self.summaries = summaries
-        self.audioFiles = audioFiles
         self.vocabulary = vocabulary
         self.drainTimeout = drainTimeout
+        self.recoveryPolicy = recoveryPolicy
     }
 }
 
@@ -82,10 +85,14 @@ public actor MeetingSession {
     public private(set) var transcript = Transcript()
 
     private let scope: SystemAudioScope
-    private let env: SessionEnvironment
+    private var env: SessionEnvironment
     private let broadcaster = Broadcaster<SessionEvent>()
     private var sources: [any AudioSource] = []
     private var pumps: [Task<Void, Never>] = []
+    private var transcriptions: [AudioChunk.Source: LiveTranscription] = [:]
+    private var suppressEcho = false
+    private var echoEnvelope = EchoEnvelope()
+    private var systemAudioEnded = false
     /// `stop()` arrived while sources were still starting; `start()` stops once they're up.
     private var stopRequested = false
     /// Callers of `stopCapture()` waiting for audio to be released.
@@ -101,6 +108,11 @@ public actor MeetingSession {
 
     public nonisolated func events() -> AsyncStream<SessionEvent> { broadcaster.subscribe() }
 
+    public func retryTranscription(_ source: AudioChunk.Source) async {
+        guard state == .recording else { return }
+        await transcriptions[source]?.retry()
+    }
+
     public func setTemplate(_ templateID: String) async {
         meeting.templateID = templateID
         try? await env.meetings.save(meeting)
@@ -109,6 +121,14 @@ public actor MeetingSession {
     public func rename(_ title: String) async {
         meeting.title = title
         try? await env.meetings.save(meeting)
+    }
+
+    /// A correction made mid-meeting: rewrites what's been said so far and everything still to come.
+    /// Subscribers aren't sent the rewritten segments; whoever asked for the correction already has them.
+    public func learn(_ entry: VocabularyEntry) async throws {
+        env.vocabulary.entries.append(entry)
+        let changed = transcript.correct(with: Vocabulary(entries: [entry])).filter(\.isFinal)
+        if !changed.isEmpty { try await env.transcripts.upsert(changed, meetingID: meetingID) }
     }
 
     public func start() async throws {
@@ -125,14 +145,11 @@ public actor MeetingSession {
         var failures: [String] = []
         for source in env.makeSources(scope) {
             do {
-                let url = try env.audioFiles.recordingURL(meetingID: meetingID, source: source.source)
-                started.append((source, try await source.start(clock: clock, recordingTo: url)))
-                switch source.source {
-                case .mic: meeting.micAudioPath = url.path
-                case .system: meeting.systemAudioPath = url.path
-                }
+                // Audio exists only in memory for live transcription, never as a meeting recording.
+                started.append((source, try await source.start(clock: clock, recordingTo: nil)))
             } catch {
                 failures.append("\(source.source == .mic ? "Microphone" : "System audio"): \(error.localizedDescription)")
+                broadcaster.send(.transcriptionStatus(source.source, .unavailable(error.localizedDescription)))
             }
         }
         guard !started.isEmpty else {
@@ -144,9 +161,19 @@ public actor MeetingSession {
         try? await env.meetings.save(meeting)
 
         sources = started.map(\.0)
-        for (_, audio) in started {
-            let segments = env.transcriber.transcribe(audio)
-            pumps.append(Task { await self.pump(segments) })
+        suppressEcho = Set(sources.map(\.source)) == Set(AudioChunk.Source.allCases)
+        for (source, audio) in started {
+            let kind = source.source
+            let label = kind == .mic ? "Microphone" : "System audio"
+            let recovery = LiveTranscription(
+                provider: env.transcriber, policy: env.recoveryPolicy,
+                onAudio: { [weak self] chunk in await self?.observe(chunk) },
+                onAudioEnded: { [weak self] in await self?.audioEnded(kind) },
+                onSegment: { [weak self] segment in await self?.receive(segment) },
+                onStatus: { [broadcaster] status in broadcaster.send(.transcriptionStatus(kind, status)) },
+                onWarning: { [broadcaster] warning in broadcaster.send(.warning("\(label): \(warning)")) })
+            transcriptions[kind] = recovery
+            pumps.append(Task { await recovery.run(audio) })
         }
         transition(to: .recording)
         if stopRequested { await stop() }
@@ -157,13 +184,14 @@ public actor MeetingSession {
         if state == .starting { stopRequested = true }
         guard state == .recording else { return }
         transition(to: .stopping)
+        for transcription in transcriptions.values { await transcription.stopRetrying() }
         for source in sources { await source.stop() }
         await drainPumps()
+        transcriptions.removeAll()
 
         // Anything still partial is the best text we'll get; keep it.
         let leftovers = transcript.segments.filter { !$0.isFinal }.map { var s = $0; s.isFinal = true; return s }
-        leftovers.forEach { transcript.upsert($0) }
-        try? await env.transcripts.upsert(leftovers, meetingID: meetingID)
+        for segment in leftovers { await receive(segment) }
 
         meeting.endedAt = .now
         try? await env.meetings.save(meeting)
@@ -204,16 +232,48 @@ public actor MeetingSession {
         await withCheckedContinuation { captureWaiters.append($0) }
     }
 
-    private func pump(_ segments: AsyncThrowingStream<TranscriptSegment, Error>) async {
-        do {
-            for try await segment in segments { await receive(segment) }
-        } catch is CancellationError {
-        } catch {
-            broadcaster.send(.warning("Transcription: \(error.localizedDescription)"))
+    private func receive(_ segment: TranscriptSegment) async {
+        guard !Task.isCancelled else { return }
+        if suppressEcho, segment.speaker == .me {
+            if segment.isFinal {
+                // Let the system tap catch up, but never hold local text for more than half a second.
+                // This stays in the transcription pump, so stop() also drains the decision and its save.
+                for _ in 0..<10 {
+                    if systemAudioEnded || echoEnvelope.covered(.system) >= segment.end - 0.04 { break }
+                    do { try await Task.sleep(for: .milliseconds(50)) } catch { return }
+                }
+                guard !Task.isCancelled else { return }
+            }
+            await receiveMicrophone(segment)
+        } else {
+            await publish(segment)
         }
     }
 
-    private func receive(_ segment: TranscriptSegment) async {
+    /// Observe both tracks before inference, so suppression does not depend on which model finishes first.
+    private func observe(_ chunk: AudioChunk) {
+        if suppressEcho { echoEnvelope.append(chunk) }
+    }
+
+    private func audioEnded(_ source: AudioChunk.Source) {
+        if source == .system { systemAudioEnded = true }
+        if state == .recording {
+            broadcaster.send(.warning("\(source == .mic ? "Microphone" : "System audio") capture stopped. That track is no longer being transcribed."))
+        }
+    }
+
+    private func receiveMicrophone(_ segment: TranscriptSegment) async {
+        if echoEnvelope.assess(start: segment.start, end: segment.end) == .bleed {
+            if transcript.segments.contains(where: { $0.id == segment.id }) {
+                transcript.remove(id: segment.id)
+                broadcaster.send(.segmentRemoved(segment.id))
+            }
+        } else {
+            await publish(segment)
+        }
+    }
+
+    private func publish(_ segment: TranscriptSegment) async {
         var segment = segment
         segment.text = env.vocabulary.correct(segment.text)
         transcript.upsert(segment)

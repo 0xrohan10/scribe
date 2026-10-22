@@ -43,6 +43,8 @@ struct SettingsView: View {
                     Picker("Default summary template", selection: $model.settings.defaultTemplateID) {
                         ForEach(SummaryTemplates.all) { Text($0.name).tag($0.id) }
                     }
+                    Text("Audio is transcribed live and is not saved. Transcripts, notes, and summaries are kept.")
+                        .font(.system(size: 12)).foregroundStyle(Theme.secondary)
                 }
                 VocabularySection(vocabulary: $model.settings.vocabulary)
                 PermissionsSection()
@@ -128,13 +130,97 @@ private struct ProviderFields: View {
             let stored = Binding(
                 get: { model.settings.models[descriptor.id] ?? "" },
                 set: { model.settings.models[descriptor.id] = $0.isEmpty ? nil : $0 })
-            if let listModels {
+            if let models = Providers.transcriptionModels[descriptor.id] {
+                ModelPicker(defaultModel: defaultModel, stored: stored) { models }
+            } else if let listModels {
                 ModelPicker(defaultModel: defaultModel, stored: stored) { try await listModels(descriptor) }
                     // Refetch once the key or endpoint that decides which models exist is saved.
                     .id("\(apiKey)|\(model.settings.baseURLs[descriptor.id]?.absoluteString ?? "")")
             } else {
                 CommitField(label: "Model", prompt: defaultModel, stored: stored.wrappedValue) { stored.wrappedValue = $0 }
             }
+            if descriptor.id == model.settings.transcriptionProviderID,
+               ["cohere-transcribe", "whisperkit"].contains(descriptor.id) {
+                LocalModelControls(model: model)
+            }
+        }
+    }
+}
+
+private struct LocalModelControls: View {
+    let model: AppModel
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Text(title).accessibilityIdentifier("model.status")
+                Spacer()
+                if let status = model.localModelStatus, !isDownloading {
+                    Text(ByteCountFormatter.string(fromByteCount: status.cachedBytes, countStyle: .file) + " cached")
+                        .foregroundStyle(Theme.secondary)
+                        .accessibilityIdentifier("model.size")
+                }
+            }
+            if let status = model.localModelStatus, case .downloading(let fraction) = status.phase {
+                if let fraction {
+                    ProgressView(value: fraction, total: 1)
+                    Text(fraction, format: .percent.precision(.fractionLength(0))).foregroundStyle(Theme.secondary)
+                } else {
+                    ProgressView().controlSize(.small)
+                }
+            }
+            if let status = model.localModelStatus, case .failed(let message) = status.phase {
+                Text(message).font(.system(size: 12)).foregroundStyle(Theme.recording).textSelection(.enabled)
+            } else if model.localModelStatus == nil, case .failed(let message) = model.transcriberStatus {
+                Text(message).font(.system(size: 12)).foregroundStyle(Theme.recording)
+            }
+            HStack {
+                if model.localModelStatus?.phase != .ready {
+                    Button(actionTitle) { model.retryModel() }
+                        .disabled(model.transcriberStatus == .preparing || model.isCapturing || model.isDeletingModel)
+                        .accessibilityIdentifier("model.download")
+                }
+                Button("Delete Model…", role: .destructive) { Task { await model.deleteModel() } }
+                    .disabled(!model.canDeleteModel)
+                    .accessibilityIdentifier("model.delete")
+            }
+            Text("Downloads stay on this Mac. Percentages show provider download progress; cached size shows files on disk.")
+                .font(.system(size: 12)).foregroundStyle(Theme.secondary)
+        }
+        .padding(.vertical, 4)
+    }
+
+    private var title: String {
+        guard let status = model.localModelStatus else {
+            if case .failed = model.transcriberStatus { return "Failed" }
+            return "Checking model…"
+        }
+        switch status.phase {
+        case .notDownloaded: return "Not downloaded"
+        case .downloaded: return "Cached — not loaded"
+        case .downloading: return "Downloading…"
+        case .loading: return "Loading model…"
+        case .ready: return "Ready"
+        case .deleting: return "Deleting…"
+        case .failed: return "Failed"
+        }
+    }
+
+    private var isDownloading: Bool {
+        if case .downloading = model.localModelStatus?.phase { return true }
+        return false
+    }
+
+    private var actionTitle: String {
+        if case .failed = model.transcriberStatus { return "Retry" }
+        return switch model.localModelStatus?.phase {
+        case .ready: "Ready"
+        case .failed: "Retry"
+        case .downloaded: "Load Model"
+        case .downloading: "Downloading…"
+        case .loading: "Loading…"
+        case .deleting: "Deleting…"
+        default: "Download Model"
         }
     }
 }
@@ -169,6 +255,7 @@ private struct ModelPicker: View {
                             Text("Custom…").tag(Self.customTag)
                         }
                         .labelsHidden()
+                        .accessibilityIdentifier("model.picker")
                     } else {
                         ProgressView().controlSize(.small)
                         Text("Loading models…").foregroundStyle(.secondary)

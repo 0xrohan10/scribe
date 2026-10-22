@@ -46,6 +46,11 @@ enum Prompts {
 
         Be specific and concise. Don't invent owners or dates; use null when unknown. Use "Me" as the \
         owner for things the user committed to.
+
+        Also list words in the transcript that look misheard: a name spelled differently in different places, \
+        jargon or product names rendered as similar-sounding everyday words, phrases that make no sense in \
+        context. Give each as the transcript has it and your best guess at what was said. Only include ones \
+        you'd want the user to check; leave the list empty if nothing stands out.
         \(vocabularyNote(vocabulary))\(template.instructions.isEmpty ? "" : "\nMeeting type: \(template.name). \(template.instructions)\n")
         Reply with only a JSON object of this shape:
         {
@@ -53,7 +58,8 @@ enum Prompts {
           "decisions": ["…"],
           "actionItems": [{"task": "…", "owner": "name or null", "due": "when or null"}],
           "openQuestions": ["…"],
-          "flagged": ["…"]
+          "flagged": ["…"],
+          "uncertainTerms": [{"heard": "as transcribed", "suggestion": "likely meant"}]
         }
         """
     }

@@ -28,6 +28,7 @@ final class MeetingViewModel: Identifiable {
     private(set) var messages: [ChatMessage] = []
     private(set) var summary: MeetingSummary?
     private(set) var isRegenerating = false
+    private(set) var transcriptionStatuses: [AudioChunk.Source: TranscriptionStatus] = [:]
     var warnings: [String] = []
     /// The note whose moment the transcript is showing.
     var focusedNote: Note?
@@ -37,6 +38,10 @@ final class MeetingViewModel: Identifiable {
     @ObservationIgnored private let qa: QAEngine?
     @ObservationIgnored private let summarizer: LLMSummarizer?
     @ObservationIgnored private let summaries: any SummaryRepository
+    /// Where a reviewed meeting's corrected transcript is saved; a live one's session saves its own.
+    @ObservationIgnored private let transcripts: (any TranscriptRepository)?
+    /// Saves a correction to the user's vocabulary. Without one, the chat can't fix the transcript.
+    @ObservationIgnored private let learn: (@MainActor (_ term: String, _ heardAs: String) throws -> VocabularyEntry)?
     @ObservationIgnored private let onFinish: () -> Void
     @ObservationIgnored let clock: SessionClock
 
@@ -51,11 +56,14 @@ final class MeetingViewModel: Identifiable {
         }
     }
     var canAsk: Bool { qa != nil }
+    var canCorrect: Bool { learn != nil }
     var now: TimeInterval { isRecording ? clock.now : transcript.duration }
 
     init(
         meeting: Meeting, session: MeetingSession?, notes: NotesController, qa: QAEngine?, summarizer: LLMSummarizer?,
-        summaries: any SummaryRepository, state: SessionState = .idle, clock: SessionClock? = nil, onFinish: @escaping () -> Void = {}
+        summaries: any SummaryRepository, transcripts: (any TranscriptRepository)? = nil,
+        learn: (@MainActor (_ term: String, _ heardAs: String) throws -> VocabularyEntry)? = nil,
+        state: SessionState = .idle, clock: SessionClock? = nil, onFinish: @escaping () -> Void = {}
     ) {
         self.id = meeting.id
         self.meeting = meeting
@@ -64,6 +72,8 @@ final class MeetingViewModel: Identifiable {
         self.qa = qa
         self.summarizer = summarizer
         self.summaries = summaries
+        self.transcripts = transcripts
+        self.learn = learn
         self.state = state
         self.clock = session?.clock ?? clock ?? SessionClock()
         self.onFinish = onFinish
@@ -78,10 +88,12 @@ final class MeetingViewModel: Identifiable {
     /// Loads a finished meeting for review.
     static func review(
         _ meeting: Meeting, transcripts: any TranscriptRepository, noteRepository: any NoteRepository, summaries: any SummaryRepository,
-        qa: QAEngine?, summarizer: LLMSummarizer?
+        qa: QAEngine?, summarizer: LLMSummarizer?, learn: (@MainActor (_ term: String, _ heardAs: String) throws -> VocabularyEntry)? = nil
     ) async throws -> MeetingViewModel {
         let notes = NotesController(meetingID: meeting.id, clock: SessionClock(), repository: noteRepository)
-        let vm = MeetingViewModel(meeting: meeting, session: nil, notes: notes, qa: qa, summarizer: summarizer, summaries: summaries, state: .finished)
+        let vm = MeetingViewModel(
+            meeting: meeting, session: nil, notes: notes, qa: qa, summarizer: summarizer, summaries: summaries, transcripts: transcripts,
+            learn: learn, state: .finished)
         vm.transcript = Transcript(segments: try await transcripts.segments(meetingID: meeting.id))
         vm.notes = try await notes.load()
         vm.summary = try await summaries.summary(meetingID: meeting.id)
@@ -103,6 +115,10 @@ final class MeetingViewModel: Identifiable {
         await session?.stop()
     }
 
+    func retryTranscription(_ source: AudioChunk.Source) async {
+        await session?.retryTranscription(source)
+    }
+
     /// Returns once audio is released; the summary finishes in the background.
     func stopCapture() async {
         await session?.stopCapture()
@@ -114,6 +130,8 @@ final class MeetingViewModel: Identifiable {
             state = s
             if s == .finished { onFinish() }
         case .segment(let segment): transcript.upsert(segment)
+        case .segmentRemoved(let id): transcript.remove(id: id)
+        case .transcriptionStatus(let source, let status): transcriptionStatuses[source] = status
         case .summary(let s): summary = s
         case .warning(let w): warnings.append(w)
         }
@@ -130,7 +148,7 @@ final class MeetingViewModel: Identifiable {
     }
 
     func regenerateSummary() async {
-        guard let summarizer, !transcript.isEmpty else { return }
+        guard let summarizer, !transcript.isEmpty, !isRegenerating else { return }
         isRegenerating = true
         defer { isRegenerating = false }
         do {
@@ -139,6 +157,34 @@ final class MeetingViewModel: Identifiable {
             summary = s
         } catch {
             warnings.append("Summary failed: \(error.localizedDescription)")
+        }
+    }
+
+    // MARK: Uncertain terms
+
+    /// Applies the model's suggestion for a word it thinks was misheard, like a correction made in chat.
+    func fix(_ term: UncertainTerm) async {
+        do {
+            _ = try await correct(term.heard, to: term.suggestion)
+            await resolve(term)
+        } catch {
+            warnings.append("Couldn't fix “\(term.heard)”: \(error.localizedDescription)")
+        }
+    }
+
+    func dismiss(_ term: UncertainTerm) async {
+        await resolve(term)
+    }
+
+    /// Takes the term off the summary's list, and any others for the same words.
+    private func resolve(_ term: UncertainTerm) async {
+        guard var s = summary else { return }
+        s.uncertainTerms.removeAll { $0.heard.lowercased() == term.heard.lowercased() }
+        summary = s
+        do {
+            try await summaries.save(s)
+        } catch {
+            warnings.append("Couldn't save summary: \(error.localizedDescription)")
         }
     }
 
@@ -180,14 +226,14 @@ final class MeetingViewModel: Identifiable {
         let index = messages.count - 1
 
         do {
-            for try await delta in qa.answer(question, transcript: transcript, now: now, history: Array(history)) {
+            for try await delta in qa.answer(question, transcript: transcript, now: now, history: Array(history), correct: corrector) {
                 switch delta {
                 case .text(let t):
                     messages[index].text += t
                     messages[index].activity = nil
                 case .activity(let a): messages[index].activity = a
                 case .sources(let s): messages[index].sources += s
-                case .done: break
+                case .done, .toolCall: break
                 }
             }
         } catch {
@@ -195,6 +241,30 @@ final class MeetingViewModel: Identifiable {
         }
         messages[index].isStreaming = false
         messages[index].activity = nil
+    }
+
+    private var corrector: QAEngine.Corrector? {
+        guard learn != nil else { return nil }
+        return { [weak self] heard, term in
+            guard let self else { throw CancellationError() }
+            return try await self.correct(heard, to: term)
+        }
+    }
+
+    /// Saves the correction to the vocabulary and rewrites this meeting's transcript with it.
+    private func correct(_ heard: String, to term: String) async throws -> String {
+        guard let learn else { throw CancellationError() }
+        let entry = try learn(term, heard)
+        let changed = transcript.correct(with: Vocabulary(entries: [entry]))
+        if let session, state != .finished {
+            try await session.learn(entry)
+        } else {
+            try await transcripts?.upsert(changed.filter(\.isFinal), meetingID: meeting.id)
+        }
+        let fix = "“\(entry.heardAs ?? heard)” → “\(entry.term)”"
+        return changed.isEmpty
+            ? "Saved \(fix) to your vocabulary. It isn't in this transcript, but will be corrected from now on."
+            : "Fixed \(fix) in \(changed.count) \(changed.count == 1 ? "line" : "lines"), and saved it to your vocabulary."
     }
 }
 

@@ -18,7 +18,8 @@ public enum CaptureError: Error, LocalizedError {
     }
 }
 
-/// Normalizes captured buffers to 16 kHz mono Float32, writes them to an m4a and yields `AudioChunk`s.
+/// Normalizes captured buffers to 16 kHz mono Float32 and yields `AudioChunk`s.
+/// Writes an m4a only when the caller supplies a recording URL (for diagnostic tools).
 ///
 /// `consume` runs on the capture thread (the engine tap or the IOProc queue), which alone owns `converter`.
 /// `finish` runs on the owning actor and can overlap a last `consume`, so `file` is behind `fileLock`.

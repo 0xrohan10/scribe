@@ -91,11 +91,13 @@ public struct MeetingSummary: Sendable, Hashable, Codable {
     public var openQuestions: [String]
     /// Items the user flagged in their notes, as the model restated them.
     public var flagged: [String]
+    /// Words the model thinks the transcriber misheard, for the user to fix or dismiss.
+    public var uncertainTerms: [UncertainTerm]
     public var createdAt: Date
 
     public init(
         meetingID: UUID, templateID: String, overview: String, decisions: [String] = [], actionItems: [ActionItem] = [],
-        openQuestions: [String] = [], flagged: [String] = [], createdAt: Date = .now
+        openQuestions: [String] = [], flagged: [String] = [], uncertainTerms: [UncertainTerm] = [], createdAt: Date = .now
     ) {
         self.meetingID = meetingID
         self.templateID = templateID
@@ -104,7 +106,35 @@ public struct MeetingSummary: Sendable, Hashable, Codable {
         self.actionItems = actionItems
         self.openQuestions = openQuestions
         self.flagged = flagged
+        self.uncertainTerms = uncertainTerms
         self.createdAt = createdAt
+    }
+
+    // Summaries saved before `uncertainTerms` existed have no such key.
+    public init(from decoder: any Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        meetingID = try c.decode(UUID.self, forKey: .meetingID)
+        templateID = try c.decode(String.self, forKey: .templateID)
+        overview = try c.decode(String.self, forKey: .overview)
+        decisions = try c.decode([String].self, forKey: .decisions)
+        actionItems = try c.decode([ActionItem].self, forKey: .actionItems)
+        openQuestions = try c.decode([String].self, forKey: .openQuestions)
+        flagged = try c.decode([String].self, forKey: .flagged)
+        uncertainTerms = try c.decodeIfPresent([UncertainTerm].self, forKey: .uncertainTerms) ?? []
+        createdAt = try c.decode(Date.self, forKey: .createdAt)
+    }
+}
+
+/// A word in the transcript that looks misheard, and what the model thinks was said.
+public struct UncertainTerm: Sendable, Hashable, Codable {
+    /// As the transcript has it, e.g. "Rowan".
+    public var heard: String
+    /// The model's best guess, e.g. "Rohan".
+    public var suggestion: String
+
+    public init(heard: String, suggestion: String) {
+        self.heard = heard
+        self.suggestion = suggestion
     }
 }
 

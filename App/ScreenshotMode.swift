@@ -44,10 +44,19 @@ enum ScreenshotMode {
             review.focusedNote = review.notes.first { $0.flagged }
             try await organize(db, live: live.id, vendorCalls: [finished.id, review.id])
             await model.library.reload()
+            model.libraryQuestions.ask("What did we decide about billing?") {
+                MeetingLibraryQA(llm: DemoLibraryLLM(), search: db.meetingSearch)
+            }
+            while model.libraryQuestions.isAsking { await Task.yield() }
+            try await db.todos.save(TodoItem(title: "Prepare questions for the next vendor call", notes: "Check the written quote and DPA.",
+                                            owner: "Me", dueDate: Calendar.current.startOfDay(for: .now)))
+            await model.todos.reload()
 
             let shots: [(String, MeetingViewModel?, Route)] = [
                 ("1-live-meeting", live, .meeting), ("2-summary", finished, .meeting), ("3-note-highlight", review, .meeting),
                 ("4-settings", nil, .settings), ("5-library", nil, .library),
+                ("6-ask-meetings", nil, .libraryQuestions),
+                ("7-todos", nil, .todos),
             ]
             for (name, vm, route) in shots {
                 model.display(vm, route: route)
@@ -70,8 +79,7 @@ enum ScreenshotMode {
         let env = SessionEnvironment(
             makeSources: { _ in [DemoAudioSource(.system, from: 0, seconds: 33), DemoAudioSource(.mic, from: 3, seconds: 27)] },
             transcriber: FakeTranscriptionProvider(segmentDuration: 6), summarizer: nil,
-            meetings: db.meetings, transcripts: db.transcripts, notes: db.notes, summaries: db.summaries,
-            audioFiles: DiskAudioFileStore(root: URL.temporaryDirectory.appending(path: "scribe-preview")))
+            meetings: db.meetings, transcripts: db.transcripts, notes: db.notes, summaries: db.summaries)
         // Back-date the clock so the timer and note stamps read as mid-meeting.
         let session = MeetingSession(meeting: meeting, scope: .allApps, environment: env, clock: SessionClock(originHostTime: hostTime(secondsAgo: 34)))
         let vm = MeetingViewModel(
@@ -213,6 +221,26 @@ private actor DemoAudioSource: AudioSource {
     }
 
     func stop() { continuation?.finish() }
+}
+
+/// Quotes the real retrieved demo text so library screenshots exercise the retrieval path offline.
+private struct DemoLibraryLLM: LLMProvider {
+    let id = "demo-library"
+    let capabilities = LLMCapabilities()
+
+    func complete(_ req: LLMRequest) -> AsyncThrowingStream<LLMDelta, Error> {
+        AsyncThrowingStream { out in
+            do {
+                struct Source: Decodable { let citation: Int; let quote: String }
+                guard let system = req.system, let marker = system.range(of: "Retrieved sources (JSON):\n") else {
+                    throw LLMError.api("Demo request has no retrieved sources.")
+                }
+                let sources = try JSONDecoder().decode([Source].self, from: Data(system[marker.upperBound...].utf8))
+                out.yield(.text(sources.prefix(2).map { "“\($0.quote)” [\($0.citation)]" }.joined(separator: "\n\n")))
+                out.finish()
+            } catch { out.finish(throwing: error) }
+        }
+    }
 }
 
 /// Answers every question with the same canned, web-sourced reply.

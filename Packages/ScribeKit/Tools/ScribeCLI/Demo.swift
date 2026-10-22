@@ -60,7 +60,6 @@ struct Demo: AsyncParsableCommand {
             transcriber: FakeTranscriptionProvider(segmentDuration: segment),
             summarizer: noSummary ? nil : LLMSummarizer(llm: llm),
             meetings: database.meetings, transcripts: database.transcripts, notes: database.notes, summaries: database.summaries,
-            audioFiles: DiskAudioFileStore(root: URL.temporaryDirectory.appending(path: "scribe-cli")),
             drainTimeout: .seconds(2))
         let session = MeetingSession(meeting: Meeting(title: title, templateID: template), scope: .allApps, environment: env)
         let clock = session.clock
@@ -73,6 +72,8 @@ struct Demo: AsyncParsableCommand {
                 switch event {
                 case .state(let state): log("state    \(state)")
                 case .segment(let s): log("\(s.isFinal ? "final  " : "partial") \(s.speaker == .me ? "Me  " : "Them") [\(s.start.clockString)] \(s.text)")
+                case .segmentRemoved(let id): log("echo removed \(id)")
+                case .transcriptionStatus(let source, let status): log("\(source.rawValue): \(status)")
                 case .summary: log("summary  saved")
                 case .warning(let message): log("warning  \(message)")
                 }
@@ -101,6 +102,7 @@ struct Demo: AsyncParsableCommand {
                     case .activity(let a): log("activity \(a)")
                     case .sources(let sources): sources.forEach { log("source   \($0.title) \($0.url)") }
                     case .done(let reason): log("answer   (\(reason ?? "done")) \(answer)")
+                    case .toolCall: break
                     }
                 }
                 history += [LLMMessage(role: .user, content: step.text), LLMMessage(role: .assistant, content: answer)]

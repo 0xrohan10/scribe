@@ -5,6 +5,9 @@ import SwiftUI
 struct SummaryView: View {
     let summary: MeetingSummary?
     let isLoading: Bool
+    /// Applies a suggested spelling. Without one, misheard words can only be dismissed.
+    var fix: ((UncertainTerm) -> Void)?
+    var dismiss: ((UncertainTerm) -> Void)?
     @State private var copied = false
     /// False while summarizing, then true once the summary is on screen, so its sections stagger in as it arrives.
     /// A summary that's already there when the view opens just appears.
@@ -52,6 +55,8 @@ struct SummaryView: View {
                         .rise(isShown: revealed, delay: 0.2)
                         Section("Open questions", items: summary.openQuestions, icon: "questionmark.circle")
                             .rise(isShown: revealed, delay: 0.25)
+                        UncertainTermsSection(terms: summary.uncertainTerms, fix: fix, dismiss: dismiss)
+                            .rise(isShown: revealed, delay: 0.3)
                     }
                     .textSelection(.enabled)
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -112,6 +117,47 @@ private struct Section: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
                 }
             }
+        }
+    }
+}
+
+/// Words the model thinks were misheard, each with its guess and a way to accept or dismiss it.
+private struct UncertainTermsSection: View {
+    let terms: [UncertainTerm]
+    let fix: ((UncertainTerm) -> Void)?
+    let dismiss: ((UncertainTerm) -> Void)?
+
+    var body: some View {
+        if !terms.isEmpty {
+            VStack(alignment: .leading, spacing: 10) {
+                Label {
+                    Text("Possibly misheard").font(.system(size: 15, weight: .semibold))
+                } icon: {
+                    Image(systemName: "ear.trianglebadge.exclamationmark").foregroundStyle(Theme.secondary)
+                }
+                ForEach(terms, id: \.self) { term in
+                    HStack(alignment: .firstTextBaseline, spacing: 8) {
+                        Text("“\(term.heard)”").foregroundStyle(Theme.secondary)
+                        Image(systemName: "arrow.right").font(.system(size: 11)).foregroundStyle(Theme.tertiary)
+                        Text(term.suggestion)
+                        Spacer()
+                        if let fix {
+                            Button("Fix") { fix(term) }
+                                .buttonStyle(QuietButtonStyle())
+                                .help("Replace “\(term.heard)” with “\(term.suggestion)” in this transcript and save it to your vocabulary")
+                        }
+                        if let dismiss {
+                            Button("Dismiss", systemImage: "xmark") { dismiss(term) }
+                                .labelStyle(.iconOnly)
+                                .buttonStyle(.borderless)
+                                .foregroundStyle(Theme.secondary)
+                        }
+                    }
+                    .font(.system(size: 14))
+                    .transition(.opacity)
+                }
+            }
+            .motion(Motion.quick, value: terms)
         }
     }
 }

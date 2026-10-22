@@ -4,10 +4,20 @@ import Transcription
 
 /// Every selectable provider. Adding one = write the adapter in ScribeKit, add one `register` line here.
 enum Providers {
+    /// Known local checkpoints, available in the picker without a network request.
+    static let transcriptionModels: [String: [String]] = [
+        "whisperkit": [
+            "openai_whisper-tiny", "openai_whisper-base", "openai_whisper-small",
+            WhisperKitProvider.defaultModel,
+        ],
+        "cohere-transcribe": [CohereTranscriptionProvider.defaultModel],
+    ]
+
     static let transcription: ProviderRegistry<any TranscriptionProvider> = {
         var r = ProviderRegistry<any TranscriptionProvider>()
         r.register(.init(id: "speech-analyzer", displayName: "Apple SpeechAnalyzer (on-device)", isAvailable: SpeechAnalyzerProvider.isSupported)) { SpeechAnalyzerProvider(vocabulary: $0.vocabulary) }
         r.register(.init(id: "whisperkit", displayName: "Whisper (on-device)", defaultModel: WhisperKitProvider.defaultModel)) { WhisperKitProvider(config: $0) }
+        r.register(.init(id: "cohere-transcribe", displayName: "Cohere Transcribe (on-device)", defaultModel: CohereTranscriptionProvider.defaultModel, isAvailable: CohereTranscriptionProvider.isSupported)) { CohereTranscriptionProvider(config: $0) }
         r.register(.init(id: "fake", displayName: "Fake (demo lines)")) { _ in FakeTranscriptionProvider() }
         // TODO: DeepgramProvider, AssemblyAIProvider, OpenAIRealtimeProvider once implemented.
         return r

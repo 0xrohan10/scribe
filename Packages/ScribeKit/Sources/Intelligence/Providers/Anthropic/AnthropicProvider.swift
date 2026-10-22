@@ -22,7 +22,7 @@ public struct AnthropicProvider: LLMProvider {
 
     public func complete(_ req: LLMRequest) -> AsyncThrowingStream<LLMDelta, Error> {
         do {
-            return ServerSentEvents.deltas(for: try urlRequest(req), session: session, decode: AnthropicStreamDecoder.decode)
+            return ServerSentEvents.deltas(for: try urlRequest(req), session: session, decoder: AnthropicStreamDecoder.self)
         } catch {
             return AsyncThrowingStream { $0.finish(throwing: error) }
         }
@@ -52,6 +52,8 @@ public struct AnthropicProvider: LLMProvider {
         let tools: [[String: Any]] = req.tools.map { tool in
             switch tool {
             case .webSearch(let maxUses): ["type": "web_search_20250305", "name": "web_search", "max_uses": maxUses]
+            case .function(let name, let description, let parameters):
+                ["name": name, "description": description, "input_schema": parameters.jsonSchema]
             }
         }
         if !tools.isEmpty { body["tools"] = tools }
@@ -66,9 +68,13 @@ public struct AnthropicProvider: LLMProvider {
     }
 }
 
-enum AnthropicStreamDecoder {
+struct AnthropicStreamDecoder: StreamDecoder {
+    /// `tool_use` blocks whose arguments are still streaming, by content block index.
+    private var toolUses: [Int: (name: String, json: String)] = [:]
+
     private struct Event: Decodable {
         var type: String
+        var index: Int?
         var delta: Delta?
         var contentBlock: Block?
         var error: APIError?
@@ -76,21 +82,24 @@ enum AnthropicStreamDecoder {
         struct Delta: Decodable {
             var type: String?
             var text: String?
+            var partialJson: String?
             var stopReason: String?
         }
 
         struct Block: Decodable {
             var type: String
+            var name: String?
             var content: [SearchResult]?
 
             init(from decoder: any Decoder) throws {
                 let c = try decoder.container(keyedBy: CodingKeys.self)
                 type = try c.decode(String.self, forKey: .type)
+                name = try c.decodeIfPresent(String.self, forKey: .name)
                 // `content` is an array of results, or an error object when the search failed.
                 content = try? c.decode([SearchResult].self, forKey: .content)
             }
 
-            enum CodingKeys: String, CodingKey { case type, content }
+            enum CodingKeys: String, CodingKey { case type, name, content }
         }
 
         struct SearchResult: Decodable {
@@ -103,13 +112,24 @@ enum AnthropicStreamDecoder {
         }
     }
 
-    static func decode(_ data: String) throws -> [LLMDelta] {
+    init() {}
+
+    mutating func decode(_ data: String) throws -> [LLMDelta] {
         let event = try ServerSentEvents.snakeCaseDecoder.decode(Event.self, from: Data(data.utf8))
         switch event.type {
         case "content_block_delta" where event.delta?.type == "text_delta":
             return event.delta?.text.map { [.text($0)] } ?? []
+        case "content_block_delta" where event.delta?.type == "input_json_delta":
+            if let index = event.index, let json = event.delta?.partialJson { toolUses[index]?.json += json }
+            return []
+        case "content_block_stop":
+            guard let index = event.index, let toolUse = toolUses.removeValue(forKey: index) else { return [] }
+            return [.toolCall(LLMToolCall(name: toolUse.name, json: toolUse.json))]
         case "content_block_start":
             switch event.contentBlock?.type {
+            case "tool_use":
+                if let index = event.index, let name = event.contentBlock?.name { toolUses[index] = (name, "") }
+                return []
             case "server_tool_use":
                 return [.activity("Searching the web…")]
             case "web_search_tool_result":
