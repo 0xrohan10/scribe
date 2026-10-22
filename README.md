@@ -1,8 +1,91 @@
 # Scribe
 
-A macOS meeting-notes app. It captures your mic and the meeting's system audio on the device (no bot joins the call), transcribes live, answers questions mid-meeting, keeps timestamped notes, and summarizes when the meeting ends. Meeting audio is not saved; only transcripts, notes, and summaries are kept.
+**Be in the meeting. Leave with a plan.**
 
-macOS 14.2+ (Core Audio process taps). On-device transcription with `SpeechAnalyzer` needs macOS 26.
+Scribe turns your calls into live transcripts, clear summaries, and todos you can act on. A native macOS app that captures both sides of the conversation—without sending a bot into the call.
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/1-live-meeting-dark.png">
+  <img src="docs/screenshots/1-live-meeting.png" alt="Scribe transcribing a roadmap review live, with separate Me and Them text and a timestamped note" width="1280">
+</picture>
+
+**No meeting bot. On-device transcription. Follow-up built in.**
+
+[Features](#from-conversation-to-next-steps) · [Get started](#get-started) · [Privacy](#your-audio-stays-in-the-moment) · [Development](#develop)
+
+## From conversation to next steps
+
+### Stay in the conversation
+
+Let the live transcript keep track while you listen. Scribe captures your microphone and the meeting's system audio as separate **Me** and **Them** tracks. Add a note without losing your place, or ask “What did they just say?” to catch up without interrupting.
+
+### Keep the context, not just the note
+
+A short note is more useful when you know what led to it. Scribe anchors notes to the transcript and highlights the surrounding discussion when you select one. Flag the risks and details you want the summary to carry forward.
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/3-note-highlight-dark.png">
+  <img src="docs/screenshots/3-note-highlight.png" alt="A flagged budget note selected beside the highlighted transcript passages that give it context" loading="lazy" width="1280">
+</picture>
+
+### End the call with something useful
+
+Turn the discussion into an overview, decisions, action items, and open questions. Keep flagged concerns visible, then copy the summary as Markdown for your team or project notes.
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/2-summary-dark.png">
+  <img src="docs/screenshots/2-summary.png" alt="A vendor-call summary with decisions, action items, an open question, and a flagged staffing risk" loading="lazy" width="1280">
+</picture>
+
+### Turn “I'll do that” into a todo
+
+Meeting action items flow into a standalone task list, alongside anything you add yourself. Set owners and due dates, focus on **Today**, and open the source meeting when you need context. Your edits and completed tasks stay yours—even when you regenerate a summary.
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/7-todos-dark.png">
+  <img src="docs/screenshots/7-todos.png" alt="Todos showing a personal task and imported meeting actions, with owners, a due date, and source-meeting links" loading="lazy" width="1280">
+</picture>
+
+### Ask your meetings, not your memory
+
+“What did we decide about billing?” Ask across saved transcripts, notes, and summaries. Get an answer with citations and source quotes, then open the original meeting to check the details. Library questions search your saved text, not the web.
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/6-ask-meetings-dark.png">
+  <img src="docs/screenshots/6-ask-meetings.png" alt="Ask your meetings answering a billing question with numbered citations and expandable source quotes" loading="lazy" width="1280">
+</picture>
+
+### Give every meeting a home
+
+Keep vendor calls, product reviews, and 1:1s together with folders and tags. Your transcripts, notes, summaries, and linked tasks stay connected after the call ends.
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/5-library-dark.png">
+  <img src="docs/screenshots/5-library.png" alt="The meeting library organized with Product, Vendors, and 1:1s folders, plus topic tags" loading="lazy" width="1280">
+</picture>
+
+*Screenshots show the real app with demo data. Light and dark versions follow your display preference.*
+
+## Your audio stays in the moment
+
+- **Transcribe on your Mac.** Choose Apple SpeechAnalyzer, WhisperKit, or Cohere Transcribe. Cohere runs through native MLX—no Python or local server. Downloaded Cohere models can transcribe offline.
+- **Keep the useful text, not an audio archive.** New meetings save transcripts, notes, and summaries, not audio files.
+- **Choose your AI provider.** Q&A and summaries use your configured Anthropic or OpenAI-compatible provider. These features send text context to that provider; on-device transcription does not make every AI feature offline.
+- **Keep your library local.** Meeting text and todos are stored in SQLite on your Mac. Cross-meeting questions send matching excerpts and conversation context to your AI provider.
+
+Always get any consent required before capturing a meeting.
+
+## Get started
+
+Scribe is **alpha software**. Build it from source with the [development instructions](#develop) below.
+
+- **macOS 14.2+** for system audio capture. Apple SpeechAnalyzer requires **macOS 26**.
+- **Apple Silicon** for Cohere Transcribe. Building that provider requires **Swift 6.3+** and Xcode's Metal toolchain; see [Local Cohere Transcribe](#local-cohere-transcribe).
+- Allow microphone and system audio access when prompted. Choose your transcription provider in **Settings** and download a model if needed.
+- Configure an AI provider for Q&A and summaries, then start **New recording**. Stop capture to get a summary and collect its action items in **Todos**.
+
+<details>
+<summary>Architecture and developer tools</summary>
 
 ## Layout
 
@@ -80,6 +163,8 @@ cd Packages/ScribeKit && swift run scribe-tapcheck --bundle com.google.Chrome --
 ```
 
 Leave out `--bundle` to tap all apps, or use `--bundle us.zoom.xos` for Zoom. The tool prints per-second levels and writes `tapcheck-system.m4a`. If every level reads as silence, the System Audio Recording permission was denied for your terminal.
+
+</details>
 
 ## Local Cohere Transcribe
 
@@ -218,4 +303,4 @@ This build isn't notarized, so it's only for your own Mac. Gatekeeper blocks it 
 - The Meet probe only sees each browser window's active tab. A browser-extension `MeetingDetector` is planned.
 - Anthropic `pause_turn`, used for long server-tool turns, isn't continued automatically yet.
 - Long meetings send the most recent ~120k characters of transcript. `TranscriptContextProvider` is the seam for adding chunking or retrieval.
-- Recordings are 16 kHz mono AAC: speech quality, not archival quality.
+- Transcription, summaries, and extracted action items can contain errors. Check important details against the transcript.
