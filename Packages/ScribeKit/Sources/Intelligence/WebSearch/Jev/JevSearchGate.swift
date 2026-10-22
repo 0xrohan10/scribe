@@ -33,7 +33,7 @@ public struct JevSearchGate: SearchGate {
     }
 
     func urlRequest(question: String, transcript: Transcript) async throws -> URLRequest {
-        // The recent stretch is what follow-up questions refer to; it also keeps the call small.
+        // Use recent transcript text for follow-up questions and to limit the request size.
         let recent = await RollingTranscriptContext(maxCharacters: 8_000).context(for: question, transcript: transcript)
         let body: [String: Any] = [
             "model": model,

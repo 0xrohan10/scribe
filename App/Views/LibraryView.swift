@@ -1,7 +1,7 @@
 import Core
 import SwiftUI
 
-/// The meetings in the sidebar's selected folder or tag, as a centered reading column.
+/// Lists meetings for the selected folder or tag in a centered column.
 struct LibraryView: View {
     let app: AppModel
     let library: LibraryModel
@@ -80,10 +80,10 @@ struct LibraryView: View {
     }
 }
 
-/// The empty library: a calm welcome and one obvious thing to do.
+/// The empty library with a button to start capture.
 private struct Greeting: View {
     let app: AppModel
-    /// Drives the one-time entrance: the mark, greeting, pitch and button arrive one after another.
+    /// Animates the mark, greeting, description, and button in sequence on first appearance.
     @State private var appeared = false
 
     var body: some View {

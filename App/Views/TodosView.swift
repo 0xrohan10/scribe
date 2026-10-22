@@ -72,11 +72,11 @@ struct TodosView: View {
         .task { await model.reload() }
         .onAppear { addingFocused = true }
         .sheet(item: $editing) { TodoEditor(item: $0, model: model) }
-        .confirmationDialog("Delete “\(deleting?.title ?? "todo")”?", isPresented: Binding(get: { deleting != nil }, set: { if !$0 { deleting = nil } })) {
+        .confirmationDialog("Delete \"\(deleting?.title ?? "todo")\"?", isPresented: Binding(get: { deleting != nil }, set: { if !$0 { deleting = nil } })) {
             if let item = deleting {
                 Button("Delete Todo", role: .destructive) { deleting = nil; Task { await model.delete(item) } }
             }
-        } message: { Text("Meeting transcripts and summaries are not changed. Deleted imported tasks will not return when the same action is summarized again.") }
+        } message: { Text("This does not change meeting transcripts or summaries. Regenerating a summary will not restore this task if the action wording and owner match.") }
     }
 
     private func row(_ item: TodoItem) -> some View {
@@ -133,7 +133,7 @@ struct TodosView: View {
     private var emptyMessage: String {
         if !model.query.isEmpty { return "No matching todos." }
         switch model.filter {
-        case .open: return "No open todos. Add one above; meeting action items will appear here too."
+        case .open: return "No open todos. Add a task above or generate a meeting summary to import its action items."
         case .today: return "Nothing due today or overdue."
         case .completed: return "Completed todos appear here."
         }
@@ -179,7 +179,7 @@ struct TodoEditor: View {
                 if hasDate { DatePicker("Due", selection: $date, displayedComponents: .date) }
                 if let suggestion, !hasDate {
                     HStack {
-                        Text("Meeting suggested “\(suggestion)”. Choose a date to confirm.").font(.system(size: 12))
+                        Text("The meeting suggested \"\(suggestion)\". Choose a date to confirm.").font(.system(size: 12))
                         Button("Clear suggestion") { self.suggestion = nil }.buttonStyle(.borderless)
                     }
                 }

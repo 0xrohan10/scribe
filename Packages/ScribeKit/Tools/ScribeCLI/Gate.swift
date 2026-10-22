@@ -8,8 +8,8 @@ struct Gate: AsyncParsableCommand {
     static let configuration = CommandConfiguration(
         abstract: "Score questions with the TypeSafe Jev search gate (calls the API).",
         discussion: """
-            Prints P(needs web) per question and whether it clears the threshold. Questions come from the arguments, \
-            or one per line on stdin. The transcript is a built-in vendor call unless --meeting picks a saved one.
+            Prints P(needs web) per question and whether it meets the threshold. Questions come from the arguments, \
+            or one per line on stdin. The transcript is a built-in vendor call unless --meeting selects a saved one.
 
             The API key is $TYPESAFE_API_KEY, else the app's Keychain entry (macOS may ask to allow access).
             """)

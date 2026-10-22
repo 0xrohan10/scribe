@@ -37,7 +37,7 @@ let package = Package(
         // Records N seconds of system audio through a process tap and reports levels.
         // `swift run scribe-tapcheck --bundle com.google.Chrome --seconds 10`
         .executableTarget(name: "scribe-tapcheck", dependencies: ["Core", "Capture"], path: "Tools/TapCheck"),
-        // Dev debugging: runs meetings with fake audio, transcription and LLM, dumps databases, probes the search gate.
+        // Debugging tool: runs meetings with fake audio, transcription and LLM, prints databases and tests the search gate.
         // `swift run scribe demo --seconds 12 --note "5:! billing is the risk" --ask "what did they just say?"`
         .executableTarget(
             name: "scribe",

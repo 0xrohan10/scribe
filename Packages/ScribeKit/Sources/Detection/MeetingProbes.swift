@@ -16,7 +16,7 @@ public struct DetectedMeeting: Sendable, Hashable {
     }
 }
 
-/// One cheap check for "is a meeting of this kind in progress right now?". Polled while the mic is in use.
+/// Checks whether a meeting of this kind is in progress. Polled while the mic is in use.
 public protocol MeetingProbe: Sendable {
     func probe() async -> DetectedMeeting?
 }

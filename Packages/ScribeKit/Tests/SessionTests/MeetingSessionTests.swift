@@ -86,8 +86,8 @@ private struct GatedSummarizer: MeetingSummarizer {
     }
 }
 
-/// Ignores the end of its audio and the session's cancellation, and keeps sending text, like a stuck
-/// network provider that eventually wakes up.
+/// Keeps sending text after audio ends and the session is cancelled, like a network provider
+/// that responds after a delay.
 private struct StubbornTranscriber: TranscriptionProvider {
     let id = "stubborn"
     func transcribe(_ audio: AsyncStream<AudioChunk>) -> AsyncThrowingStream<TranscriptSegment, Error> {

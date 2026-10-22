@@ -164,7 +164,7 @@ enum ScreenshotMode {
     private static func snapshot(_ view: some View, size: CGSize, appearance: NSAppearance.Name, to url: URL) async throws {
         let hosting = NSHostingView(rootView: view)
         hosting.frame = CGRect(origin: .zero, size: size)
-        // The same chrome as the main window, so the title bar buttons are in the picture.
+        // Include the main window's title bar and buttons in screenshots.
         let window = NSWindow(
             contentRect: hosting.frame, styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView],
             backing: .buffered, defer: false)

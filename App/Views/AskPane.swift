@@ -14,7 +14,7 @@ struct AskPane: View {
                         ForEach(vm.messages) { message in
                             MessageView(message: message)
                                 .id(message.id)
-                                // Each bubble grows out of its tail corner; the answer follows the question by a beat.
+                                // Scale each bubble from its tail corner. Delay the answer by 80 ms.
                                 .transition(
                                     message.role == .user
                                         ? .rise(from: .bottomTrailing)
@@ -31,7 +31,7 @@ struct AskPane: View {
             }
             .overlay {
                 if vm.messages.isEmpty {
-                    Text(vm.canAsk ? "Try “what did they just say?” or “what's their pricing?”" : "Add an AI provider in Settings to ask questions.")
+                    Text(vm.canAsk ? "Try \"what did they just say?\" or \"what's their pricing?\"" : "Add an AI provider in Settings to ask questions.")
                         .font(.system(size: 13))
                         .foregroundStyle(Theme.secondary)
                         .multilineTextAlignment(.center)
@@ -62,8 +62,7 @@ struct AskPane: View {
     }
 }
 
-/// Like Messages: my questions in ink bubbles on the right, answers in quiet bubbles on the left, each with its tail
-/// corner toward its side.
+/// Questions appear on the right and answers on the left. Each bubble's tail points toward its side.
 private struct MessageView: View {
     let message: ChatMessage
 
@@ -114,7 +113,7 @@ private struct MessageView: View {
             }
         }
         .frame(maxWidth: .infinity, alignment: isUser ? .trailing : .leading)
-        // Bubbles never span the panel, so whose turn it is reads at a glance.
+        // Limit bubble width to distinguish questions from answers.
         .padding(isUser ? .leading : .trailing, 36)
         .motion(Motion.quick, value: message.text)
         .accessibilityElement(children: .contain)
@@ -123,8 +122,7 @@ private struct MessageView: View {
 }
 
 extension View {
-    /// A chat bubble: rounded, with a tighter corner at the bottom on the speaker's side. Answers get a hairline border
-    /// so they hold their shape on the panel.
+    /// Rounds the bubble with a smaller bottom corner on the speaker's side. Adds a thin border to answers.
     fileprivate func bubble(_ fill: Color, tail: HorizontalEdge) -> some View {
         let shape = UnevenRoundedRectangle(
             topLeadingRadius: 16, bottomLeadingRadius: tail == .leading ? 5 : 16, bottomTrailingRadius: tail == .trailing ? 5 : 16,
@@ -136,7 +134,7 @@ extension View {
     }
 }
 
-/// Three dots that breathe in turn while an answer is on its way. Under Reduce Motion they only fade.
+/// Animates three dots while waiting for an answer. Reduce Motion disables scaling but keeps fading.
 private struct TypingIndicator: View {
     @State private var isAnimating = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion

@@ -69,7 +69,7 @@ struct SummaryRecord: Codable, FetchableRecord, PersistableRecord {
     static let databaseTableName = "summary"
 
     var meetingID: UUID
-    /// Stored as JSON so the summary shape can evolve without migrations.
+    /// Stored as JSON so the summary structure can change without migrations.
     var payload: MeetingSummary
     var createdAt: Date
 }

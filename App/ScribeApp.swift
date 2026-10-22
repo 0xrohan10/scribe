@@ -37,11 +37,9 @@ struct ScribeApp: App {
     }
 }
 
-/// The one main window: sidebar plus library, meeting or settings. AppKit-managed so it can be opened from a
-/// notification action, where SwiftUI's `openWindow` isn't reachable.
+/// AppKit manages the main window so notification actions can open it without SwiftUI's `openWindow`.
 ///
-/// Scribe lives in the menu bar, but while this window is open it's a regular app with a Dock icon and a place
-/// in ⌘-Tab.
+/// While this window is open, Scribe shows a Dock icon and appears in ⌘-Tab.
 @MainActor
 final class MainWindowController: NSObject, NSWindowDelegate {
     private var window: NSWindow?

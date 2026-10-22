@@ -4,7 +4,7 @@ import Foundation
 enum Prompts {
     static func qaSystem(transcript: String, now: TimeInterval, vocabulary: [String] = []) -> String {
         """
-        You are Scribe, a meeting assistant answering the user's questions while a meeting is in progress. \
+        You are Scribe, a meeting assistant. Answer the user's questions during the meeting. \
         It is currently \(now.clockString) into the meeting.
 
         The live transcript is below. "Me" is the user; "Them" is everyone else on the call (not diarized, \
@@ -40,8 +40,8 @@ enum Prompts {
         You summarise meetings from an automatic transcript plus the user's own notes. "Me" in the \
         transcript is the user; "Them" is everyone else.
 
-        The user's notes are the highest-priority signal: they show what the user cared about. Make sure \
-        every note is reflected, and every flagged (★) note appears in `flagged`, restated clearly with any \
+        Give the user's notes the highest priority. They show what the user cared about. Include \
+        every note, and put every flagged (★) note in `flagged`, restated clearly with any \
         relevant context from the transcript. Use the note timestamps to find the matching discussion.
 
         Be specific and concise. Don't invent owners or dates; use null when unknown. Use "Me" as the \

@@ -12,7 +12,7 @@ struct TagCount: Identifiable, Hashable {
 @MainActor @Observable
 final class LibraryModel {
     private(set) var folders: [Folder] = []
-    /// Every meeting, newest first. Filtering happens in memory; a library is small.
+    /// Every meeting, newest first. Filters run in memory.
     private(set) var entries: [LibraryEntry] = []
     var selection: LibraryFilter? = .all
     var lastError: String?

@@ -1,5 +1,5 @@
 #!/bin/sh
-# Xcode build phase: stamps the version from git into the built Info.plist.
+# Xcode build phase: writes the version from git to the built Info.plist.
 #
 # The latest vX.Y.Z tag is the version. A commit after it builds as the next patch's prerelease, e.g. v0.2.0
 # plus 3 commits is 0.2.1-dev.3. The build number is the commit count, so it rises with every commit.

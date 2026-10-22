@@ -47,7 +47,7 @@ final class MeetingViewModel: Identifiable {
 
     var isLive: Bool { session != nil }
     var isRecording: Bool { state == .recording || state == .starting }
-    /// Holds (or is about to hold) the mic and system audio: includes a live session that hasn't started yet.
+    /// True for a live session, including one that has not started capture yet.
     var isCapturing: Bool {
         guard isLive else { return false }
         switch state {
@@ -168,7 +168,7 @@ final class MeetingViewModel: Identifiable {
             _ = try await correct(term.heard, to: term.suggestion)
             await resolve(term)
         } catch {
-            warnings.append("Couldn't fix “\(term.heard)”: \(error.localizedDescription)")
+            warnings.append("Couldn't fix \"\(term.heard)\": \(error.localizedDescription)")
         }
     }
 
@@ -176,7 +176,7 @@ final class MeetingViewModel: Identifiable {
         await resolve(term)
     }
 
-    /// Takes the term off the summary's list, and any others for the same words.
+    /// Removes all suggestions for these words from the summary.
     private func resolve(_ term: UncertainTerm) async {
         guard var s = summary else { return }
         s.uncertainTerms.removeAll { $0.heard.lowercased() == term.heard.lowercased() }
@@ -261,10 +261,10 @@ final class MeetingViewModel: Identifiable {
         } else {
             try await transcripts?.upsert(changed.filter(\.isFinal), meetingID: meeting.id)
         }
-        let fix = "“\(entry.heardAs ?? heard)” → “\(entry.term)”"
+        let fix = "\"\(entry.heardAs ?? heard)\" with \"\(entry.term)\""
         return changed.isEmpty
-            ? "Saved \(fix) to your vocabulary. It isn't in this transcript, but will be corrected from now on."
-            : "Fixed \(fix) in \(changed.count) \(changed.count == 1 ? "line" : "lines"), and saved it to your vocabulary."
+            ? "Saved a vocabulary rule to replace \(fix). No text matched in this transcript. The rule applies to future meetings."
+            : "Replaced \(fix) in \(changed.count) \(changed.count == 1 ? "line" : "lines") and saved the rule to your vocabulary."
     }
 }
 

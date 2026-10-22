@@ -2,7 +2,7 @@ import AppKit
 import ApplicationServices
 import ArgumentParser
 
-/// A thin wrapper over one accessibility element of the app under test.
+/// One accessibility element of the app under test.
 struct Element {
     let ref: AXUIElement
 
@@ -92,7 +92,7 @@ struct TestedApp {
     }
 
     func find(_ query: String) throws -> Element {
-        guard let element = all(query).first else { throw UIError("Nothing matches “\(query)”") }
+        guard let element = all(query).first else { throw UIError("Nothing matches '\(query)'") }
         return element
     }
 
@@ -121,7 +121,7 @@ struct TestedApp {
     func menu(_ title: String) async throws {
         guard let item = statusItem else { throw UIError("Scribe's menu bar item isn't there") }
         try? item.perform(kAXPressAction)  // Returns an error once the timeout passes, though the menu is open.
-        let entry = try await wait("menu item “\(title)”", timeout: 3) { item.descendants().first { $0.role == kAXMenuItemRole && $0.title == title } }
+        let entry = try await wait("menu item '\(title)'", timeout: 3) { item.descendants().first { $0.role == kAXMenuItemRole && $0.title == title } }
         try entry.perform(kAXPressAction)
     }
 

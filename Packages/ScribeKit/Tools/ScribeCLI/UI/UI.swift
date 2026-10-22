@@ -36,7 +36,7 @@ enum UISession {
         return TestedApp(pid: pid)
     }
 
-    /// Quits any previous instance, wipes its data and starts a fresh one.
+    /// Quits any previous instance, deletes its data and starts a new one.
     static func launch(appPath: String) async throws -> TestedApp {
         try requireAccessibility()
         guard FileManager.default.fileExists(atPath: appPath) else {
@@ -117,7 +117,7 @@ struct Read: AsyncParsableCommand {
 
     func run() async throws {
         let matches = try UISession.app().all(query)
-        guard !matches.isEmpty else { throw UIError("Nothing matches “\(query)”") }
+        guard !matches.isEmpty else { throw UIError("Nothing matches '\(query)'") }
         matches.forEach { print($0.text) }
     }
 }
@@ -141,7 +141,7 @@ struct Wait: AsyncParsableCommand {
     func run() async throws {
         let app = try UISession.app()
         let (query, contains, count, gone) = (query, contains, count, gone)
-        let found = try await app.wait("“\(query)”\(contains.map { " containing “\($0)”" } ?? "")", timeout: timeout) { () -> [Element]? in
+        let found = try await app.wait("'\(query)'\(contains.map { " containing '\($0)'" } ?? "")", timeout: timeout) { () -> [Element]? in
             let matches = app.all(query).filter { e in contains.map { e.text.contains($0) } ?? true }
             return gone ? (matches.isEmpty ? [] : nil) : (matches.count >= count ? matches : nil)
         }
@@ -173,7 +173,7 @@ struct TypeText: AsyncParsableCommand {
 }
 
 struct MenuItem: AsyncParsableCommand {
-    static let configuration = CommandConfiguration(commandName: "menu", abstract: "Open the menu bar item and choose an item, e.g. “Open Scribe”.")
+    static let configuration = CommandConfiguration(commandName: "menu", abstract: "Open the menu bar item and choose an item, e.g. 'Open Scribe'.")
 
     @Argument var title: String
 
@@ -193,7 +193,7 @@ struct Screenshot: AsyncParsableCommand {
         let info = (CGWindowListCopyWindowInfo([.optionOnScreenOnly, .excludeDesktopElements], kCGNullWindowID) as? [[String: Any]]) ?? []
         let windows = info.filter { ($0[kCGWindowOwnerPID as String] as? pid_t) == pid && ($0[kCGWindowLayer as String] as? Int) == 0 }
         let match = window.map { title in windows.first { ($0[kCGWindowName as String] as? String) == title } } ?? windows.first
-        guard let id = match?[kCGWindowNumber as String] as? Int else { throw UIError("No on-screen window\(window.map { " titled “\($0)”" } ?? "")") }
+        guard let id = match?[kCGWindowNumber as String] as? Int else { throw UIError("No on-screen window\(window.map { " titled '\($0)'" } ?? "")") }
         let capture = try Process.run(URL(filePath: "/usr/sbin/screencapture"), arguments: ["-x", "-o", "-l", String(id), file])
         capture.waitUntilExit()
         guard capture.terminationStatus == 0 else { throw UIError("screencapture failed (\(capture.terminationStatus))") }

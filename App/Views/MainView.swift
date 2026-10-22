@@ -1,7 +1,7 @@
 import Core
 import SwiftUI
 
-/// The one window: sidebar on the left, then the library, a meeting or settings.
+/// The main window's sidebar and selected page.
 struct MainView: View {
     let app: AppModel
 
@@ -305,7 +305,7 @@ extension SectionHeader where Accessory == EmptyView {
     }
 }
 
-/// A steady red dot. It doesn't pulse: a slow loop in the corner of the eye is a distraction for a whole meeting.
+/// A red recording indicator without animation.
 struct RecordingDot: View {
     var body: some View {
         Circle().fill(Theme.recording).frame(width: 7, height: 7)

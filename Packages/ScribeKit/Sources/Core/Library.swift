@@ -52,7 +52,7 @@ public enum LibraryError: Error, LocalizedError, Equatable {
     public var errorDescription: String? {
         switch self {
         case .emptyFolderName: "Folder names can't be empty."
-        case .duplicateFolderName(let name): "There's already a folder named “\(name)”."
+        case .duplicateFolderName(let name): "There's already a folder named \"\(name)\"."
         }
     }
 }

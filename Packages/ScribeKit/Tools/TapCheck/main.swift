@@ -2,8 +2,8 @@ import Capture
 import Core
 import Foundation
 
-// Smoke test for process taps, since that's where capture is riskiest (Chrome/Zoom render audio in helper
-// processes). Start a call or play audio, then:
+// Tests process taps, including audio from helper processes used by Chrome and Zoom.
+// Start a call or play audio, then:
 //
 //   swift run scribe-tapcheck                                  # all apps except this one
 //   swift run scribe-tapcheck --bundle com.google.Chrome       # Chrome + helpers

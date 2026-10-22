@@ -3,8 +3,7 @@ import Intelligence
 import Session
 import SwiftUI
 
-/// One meeting: the header, the transcript or summary in a reading column with the note composer below it,
-/// and a side panel for notes and questions.
+/// Shows a meeting's header, transcript or summary, note input, and side panel for notes and questions.
 struct MeetingView: View {
     @Bindable var vm: MeetingViewModel
     let app: AppModel

@@ -1,7 +1,7 @@
 import Foundation
 import os
 
-/// Fans one producer out to any number of `AsyncStream` subscribers.
+/// Sends one producer's values to any number of `AsyncStream` subscribers.
 public final class Broadcaster<Element: Sendable>: Sendable {
     private struct State {
         var continuations: [UUID: AsyncStream<Element>.Continuation] = [:]

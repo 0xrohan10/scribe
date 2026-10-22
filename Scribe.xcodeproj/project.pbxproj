@@ -34,6 +34,7 @@
 		AF61B05911A84742D2158D3C /* MainView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 34BD422B69D155382E593EE6 /* MainView.swift */; };
 		B223389DD6B7D6F3AF1292C6 /* Core in Frameworks */ = {isa = PBXBuildFile; productRef = 6FD4B83F31EF37A646B4A9A7 /* Core */; };
 		B6DB344BD5F3A072041EAD28 /* Settings in Frameworks */ = {isa = PBXBuildFile; productRef = B04960C478E318A233ED270D /* Settings */; };
+		BC0FADCCE1E15C229505A88C /* LICENSE in Resources */ = {isa = PBXBuildFile; fileRef = 819476342DF8003C32F1D529 /* LICENSE */; };
 		BD522C00E5314D9DD3A372F6 /* Session in Frameworks */ = {isa = PBXBuildFile; productRef = B7BB7E8B224E42F0D407E6F5 /* Session */; };
 		C62E9FFCD26FEFDBE715487D /* SummaryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0DCB762DB579E32437716DE1 /* SummaryView.swift */; };
 		E8CCA56FC696EAA1FAE806B5 /* ScribeApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 880B91E8CAA267C8B8C2B36A /* ScribeApp.swift */; };
@@ -62,6 +63,7 @@
 		6F8930B1AC1567B6AEC0D082 /* MenuBarContent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MenuBarContent.swift; sourceTree = "<group>"; };
 		70FAC61B33B651C04DD30C49 /* MeetingViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MeetingViewModel.swift; sourceTree = "<group>"; };
 		7E2E63FAF04FEF1780599325 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
+		819476342DF8003C32F1D529 /* LICENSE */ = {isa = PBXFileReference; path = LICENSE; sourceTree = "<group>"; };
 		880B91E8CAA267C8B8C2B36A /* ScribeApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScribeApp.swift; sourceTree = "<group>"; };
 		937CFA70D9C6F217F5E4C37A /* ScribeKit */ = {isa = PBXFileReference; lastKnownFileType = folder; name = ScribeKit; path = Packages/ScribeKit; sourceTree = SOURCE_ROOT; };
 		9EDE74165EA6066C78AB756A /* AppIcon.icon */ = {isa = PBXFileReference; lastKnownFileType = wrapper.icon; path = AppIcon.icon; sourceTree = "<group>"; };
@@ -166,6 +168,7 @@
 		CF1A6569B97AB964E08BAAEC = {
 			isa = PBXGroup;
 			children = (
+				819476342DF8003C32F1D529 /* LICENSE */,
 				03E5B4D3F07ED16DCD4A3DA3 /* THIRD_PARTY_NOTICES.md */,
 				535AAD63C4103D5B26C0D1AE /* App */,
 				2FE2969FAE4CB09696BFF8EC /* Config */,
@@ -251,6 +254,7 @@
 			files = (
 				522F7C5809DB484B31EC1DE9 /* AppIcon.icon in Resources */,
 				563A32F4DF2D79D8419533DF /* Assets.xcassets in Resources */,
+				BC0FADCCE1E15C229505A88C /* LICENSE in Resources */,
 				FB56A5C3B7E19FC6C62B4E9A /* THIRD_PARTY_NOTICES.md in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

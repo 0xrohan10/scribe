@@ -85,7 +85,7 @@ private struct SpeechAnalyzerEngine {
         // The reader is a child task, so it's cancelled whenever feeding throws or this task is cancelled.
         try await withThrowingTaskGroup(of: Void.self) { group in
             group.addTask {
-                // Volatile results refine the not-yet-final tail; reuse one id until it's finalized.
+                // Volatile results update the partial segment. Reuse one id until it is final.
                 var pendingID = UUID()
                 for try await result in transcriber.results {
                     let text = String(result.text.characters).trimmingCharacters(in: .whitespacesAndNewlines)

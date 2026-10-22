@@ -25,7 +25,7 @@ struct EchoEnvelope {
         (source == .system ? system : microphone).expectedTime
     }
 
-    /// Local speech wins over echo, including a short local phrase inside a long remote turn.
+    /// Preserves local speech, including a short local phrase during a long remote turn.
     mutating func assess(start: TimeInterval, end: TimeInterval) -> Signal? {
         guard start.isFinite, end.isFinite, end > start, start >= 0 else { return nil }
         let first = Int(start * 50), last = max(first + 1, Int(end * 50))

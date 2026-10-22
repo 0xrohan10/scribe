@@ -23,7 +23,7 @@ struct DB: AsyncParsableCommand {
     }
 }
 
-/// Opens a database file without creating one by accident.
+/// Opens an existing database file.
 func openExisting(_ path: String?) throws -> ScribeDatabase {
     let url = path.map { URL(filePath: $0) } ?? appDatabaseURL
     guard FileManager.default.fileExists(atPath: url.path) else { throw ValidationError("No database at \(url.path)") }
@@ -92,7 +92,7 @@ func printSummary(_ s: MeetingSummary) {
         for item in items { print("  \(label.padding(toLength: 10, withPad: " ", startingAt: 0)) \(item)") }
     }
     for a in s.actionItems {
-        print("  action     \(a.task)\(a.owner.map { " — \($0)" } ?? "")\(a.due.map { ", due \($0)" } ?? "")")
+        print("  action     \(a.task)\(a.owner.map { ", owner \($0)" } ?? "")\(a.due.map { ", due \($0)" } ?? "")")
     }
 }
 

@@ -71,13 +71,13 @@ public struct SessionEnvironment: Sendable {
     }
 }
 
-/// Orchestrates one meeting: idle → starting → recording → stopping → summarizing → finished.
+/// Manages one meeting: idle → starting → recording → stopping → summarizing → finished.
 ///
 /// Each audio source streams PCM to its own `transcribe` call (one source per call, so speaker = source).
 /// Segments are merged into one `Transcript`, broadcast to subscribers and persisted once final.
 public actor MeetingSession {
     public nonisolated let meetingID: UUID
-    /// Starts at init; audio, segments and notes are all stamped against it.
+    /// Starts at init. Audio, segments and notes use this clock for timestamps.
     public nonisolated let clock: SessionClock
 
     public private(set) var meeting: Meeting
@@ -212,7 +212,7 @@ public actor MeetingSession {
     }
 
     /// Stops recording and returns once the audio sources are released and the transcript is drained.
-    /// Summarizing carries on in the background, so a new session can start right away.
+    /// The summary runs in the background, so a new session can start immediately.
     /// A session that was never started is cancelled and can't be started afterwards.
     public func stopCapture() async {
         switch state {
@@ -237,7 +237,7 @@ public actor MeetingSession {
         if suppressEcho, segment.speaker == .me {
             if segment.isFinal {
                 // Let the system tap catch up, but never hold local text for more than half a second.
-                // This stays in the transcription pump, so stop() also drains the decision and its save.
+                // Keep this in the transcription task so stop() waits for the decision and its save.
                 for _ in 0..<10 {
                     if systemAudioEnded || echoEnvelope.covered(.system) >= segment.end - 0.04 { break }
                     do { try await Task.sleep(for: .milliseconds(50)) } catch { return }

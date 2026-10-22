@@ -50,15 +50,15 @@ public enum ProviderError: Error, LocalizedError, Equatable {
 
     public var errorDescription: String? {
         switch self {
-        case .unknownProvider(let id): "Unknown provider “\(id)”."
-        case .unavailable(let id): "“\(id)” isn't available on this Mac."
-        case .missingAPIKey(let id): "Add an API key for “\(id)” in Settings."
-        case .notImplemented(let id): "“\(id)” isn't implemented yet."
+        case .unknownProvider(let id): "Unknown provider \"\(id)\"."
+        case .unavailable(let id): "\"\(id)\" isn't available on this Mac."
+        case .missingAPIKey(let id): "Add an API key for \"\(id)\" in Settings."
+        case .notImplemented(let id): "\"\(id)\" isn't implemented yet."
         }
     }
 }
 
-/// Providers are registered once at the composition root and picked by id from Settings.
+/// The app registers providers once at startup and selects them by id from Settings.
 public struct ProviderRegistry<Provider>: Sendable {
     public typealias Factory = @Sendable (ProviderConfig) throws -> Provider
 

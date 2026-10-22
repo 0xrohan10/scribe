@@ -2,7 +2,7 @@ import Core
 import Intelligence
 import Transcription
 
-/// Every selectable provider. Adding one = write the adapter in ScribeKit, add one `register` line here.
+/// Registers selectable providers. Add an adapter in ScribeKit and a `register` call here.
 enum Providers {
     /// Known local checkpoints, available in the picker without a network request.
     static let transcriptionModels: [String: [String]] = [

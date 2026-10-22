@@ -32,7 +32,7 @@ struct LibraryQuestionsView: View {
                                     .font(.system(size: 17, weight: .medium))
                                 Text(app.library.entries.isEmpty
                                      ? "Your saved meeting text will be available here. Audio is not needed."
-                                     : "Try “What did we decide about billing?” or “Who owns the migration?”")
+                                     : "Try \"What did we decide about billing?\" or \"Who owns the migration?\"")
                                     .font(.system(size: 14)).foregroundStyle(Theme.secondary)
                             }
                             .padding(.top, 40)
@@ -143,7 +143,7 @@ private struct LibraryAnswerView: View {
                                 .accessibilityIdentifier("libraryAsk.source")
                                 Text(source.kind.rawValue + (source.timestamp.map { " · \($0.clockString)" } ?? ""))
                                     .font(.system(size: 11)).foregroundStyle(Theme.secondary)
-                                Text("“\(source.text)”").font(.system(size: 13)).textSelection(.enabled)
+                                Text("\"\(source.text)\"").font(.system(size: 13)).textSelection(.enabled)
                                 if source.owner != nil || source.due != nil {
                                     Text([source.owner.map { "Owner: \($0)" }, source.due.map { "Due: \($0)" }].compactMap { $0 }.joined(separator: " · "))
                                         .font(.system(size: 11)).foregroundStyle(Theme.secondary)

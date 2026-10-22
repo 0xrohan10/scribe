@@ -43,7 +43,7 @@ struct SettingsView: View {
                     Picker("Default summary template", selection: $model.settings.defaultTemplateID) {
                         ForEach(SummaryTemplates.all) { Text($0.name).tag($0.id) }
                     }
-                    Text("Audio is transcribed live and is not saved. Transcripts, notes, and summaries are kept.")
+                    Text("Scribe transcribes audio live without saving it. It saves transcripts, notes, and summaries.")
                         .font(.system(size: 12)).foregroundStyle(Theme.secondary)
                 }
                 VocabularySection(vocabulary: $model.settings.vocabulary)
@@ -134,7 +134,7 @@ private struct ProviderFields: View {
                 ModelPicker(defaultModel: defaultModel, stored: stored) { models }
             } else if let listModels {
                 ModelPicker(defaultModel: defaultModel, stored: stored) { try await listModels(descriptor) }
-                    // Refetch once the key or endpoint that decides which models exist is saved.
+                    // Reload models after saving the API key or endpoint.
                     .id("\(apiKey)|\(model.settings.baseURLs[descriptor.id]?.absoluteString ?? "")")
             } else {
                 CommitField(label: "Model", prompt: defaultModel, stored: stored.wrappedValue) { stored.wrappedValue = $0 }
@@ -197,7 +197,7 @@ private struct LocalModelControls: View {
         }
         switch status.phase {
         case .notDownloaded: return "Not downloaded"
-        case .downloaded: return "Cached — not loaded"
+        case .downloaded: return "Cached, not loaded"
         case .downloading: return "Downloading…"
         case .loading: return "Loading model…"
         case .ready: return "Ready"
@@ -286,7 +286,7 @@ private struct SettingsInputError: LocalizedError {
     init(_ message: String) { errorDescription = message }
 }
 
-/// A bordered text field that only stores its value on Save or Return, and says whether what's shown is saved.
+/// Saves the field on Save or Return and shows whether the displayed value is saved.
 private struct CommitField: View {
     let label: String
     var prompt = ""
@@ -340,7 +340,7 @@ private struct CommitField: View {
     }
 }
 
-/// Names and terms the transcriber should spell the user's way. Applies from the next meeting.
+/// Custom spellings and transcript replacements. Changes apply to the next meeting.
 private struct VocabularySection: View {
     @Binding var vocabulary: Vocabulary
     @State private var term = ""
@@ -367,7 +367,7 @@ private struct VocabularySection: View {
                 HStack {
                     Text(entry.term)
                     if let heardAs = entry.heardAs {
-                        Text("replaces “\(heardAs)”").foregroundStyle(.secondary)
+                        Text("replaces \"\(heardAs)\"").foregroundStyle(.secondary)
                     }
                     Spacer()
                     Button("Remove", systemImage: "minus.circle") { vocabulary.entries.removeAll { $0.id == entry.id } }
@@ -378,7 +378,7 @@ private struct VocabularySection: View {
         } header: {
             Text("Vocabulary")
         } footer: {
-            Text("Names and jargon help the transcriber and the AI spell them your way. Add what it writes instead to have it replaced in every transcript. Changes apply from the next meeting.")
+            Text("Add names and terms to guide transcription and AI spelling. For automatic replacements, also enter the text to replace. Changes apply to the next meeting.")
         }
     }
 

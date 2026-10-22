@@ -22,8 +22,8 @@ public enum CaptureError: Error, LocalizedError {
 /// Writes an m4a only when the caller supplies a recording URL (for diagnostic tools).
 ///
 /// `consume` runs on the capture thread (the engine tap or the IOProc queue), which alone owns `converter`.
-/// `finish` runs on the owning actor and can overlap a last `consume`, so `file` is behind `fileLock`.
-/// That's what the `@unchecked Sendable` stands for.
+/// `finish` runs on the owning actor and can overlap a last `consume`, so `fileLock` protects `file`.
+/// These access rules make `@unchecked Sendable` safe.
 final class CaptureSink: @unchecked Sendable {
     static let sampleRate: Double = 16_000
     static let format = AVAudioFormat(commonFormat: .pcmFormatFloat32, sampleRate: sampleRate, channels: 1, interleaved: false)!

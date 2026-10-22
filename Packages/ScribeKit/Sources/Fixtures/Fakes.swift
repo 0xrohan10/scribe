@@ -23,7 +23,7 @@ public actor SilentSource: AudioSource {
         feeder = Task {
             var t = from
             while t + 0.5 <= until, !Task.isCancelled {
-                // A chunk is delivered once it has been "heard", like a real capture buffer.
+                // Deliver each chunk after its duration has elapsed, like a real capture buffer.
                 let wait = t + 0.5 - clock.now
                 if wait > 0 { try? await Task.sleep(for: .seconds(wait)) }
                 continuation.yield(AudioChunk(source: source, pcm: .init(repeating: 0, count: 8000), sampleRate: 16_000, timestamp: t))

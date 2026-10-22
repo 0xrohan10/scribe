@@ -52,7 +52,7 @@ import Testing
         let noise = [Float](repeating: 0.02, count: 1600), speech = [Float](repeating: 0.1, count: 1600)
         var t = 0.0
         for _ in 0..<50 {
-            // A fixed 0.01 threshold would call this noise speech; the floor learns it isn't.
+            // A fixed 0.01 threshold would classify this noise as speech. The adaptive floor excludes it.
             #expect(segmenter.append(noise, at: t) == nil)
             t += 0.1
         }

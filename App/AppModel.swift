@@ -27,7 +27,7 @@ enum TranscriberStatus: Equatable {
     case failed(String)
 }
 
-/// Composition root: owns the stores, wires domains together and drives the meeting lifecycle.
+/// Owns the stores, configures providers, and manages meeting state.
 @MainActor @Observable
 final class AppModel {
     var settings: AppSettings {
@@ -95,7 +95,7 @@ final class AppModel {
     }
 
     #if DEBUG
-    /// For screenshots: in-memory stores; no detection, notifications, Keychain or saved settings.
+    /// Uses in-memory stores for screenshots without detection, notifications, Keychain, or saved settings.
     init(preview settings: AppSettings, secrets: any SecretStore, database: ScribeDatabase) {
         self.secrets = secrets
         settingsStore = SettingsStore(defaults: UserDefaults(suiteName: "scribe.preview")!)
@@ -106,13 +106,13 @@ final class AppModel {
         audioFiles = DiskAudioFileStore(root: URL.temporaryDirectory.appending(path: "scribe-preview"))
     }
 
-    /// For screenshots: puts `vm` in the main window without opening it.
+    /// Sets the main window's content for screenshots without opening the window.
     func display(_ vm: MeetingViewModel?, route: Route) {
         shown = vm
         self.route = route
     }
 
-    /// For UI testing: the preview setup plus fake audio and LLM, so recording needs no permissions or network.
+    /// Adds fake audio and AI responses to the preview setup for UI tests without permissions or network access.
     convenience init(
         uiTesting settings: AppSettings, secrets: any SecretStore, database: ScribeDatabase,
         sources: @escaping @Sendable (SystemAudioScope) -> [any AudioSource], llm: any LLMProvider
@@ -179,7 +179,7 @@ final class AppModel {
         NSApp.activate()
         let alert = NSAlert()
         alert.messageText = "Stop the current recording?"
-        alert.informativeText = "“\(current.meeting.title)” is still recording. Scribe records one meeting at a time; its summary will finish in the background."
+        alert.informativeText = "\"\(current.meeting.title)\" is still recording. Scribe records one meeting at a time. After capture stops, its summary will finish in the background."
         alert.addButton(withTitle: "Stop and Start New")
         alert.addButton(withTitle: "Keep Recording")
         return alert.runModal() == .alertFirstButtonReturn
@@ -192,13 +192,13 @@ final class AppModel {
         case .ready: return
         case .notDownloaded:
             alert.messageText = "Download the transcription model?"
-            alert.informativeText = "The model must be downloaded and loaded before recording. You can see its progress in Settings."
+            alert.informativeText = "Download and load the model before recording. Check its progress in Settings."
             alert.addButton(withTitle: "Download")
             alert.addButton(withTitle: "Cancel")
             if alert.runModal() == .alertFirstButtonReturn { retryModel(); showSettings() }
         case .preparing:
             alert.messageText = "The transcription model is still loading"
-            alert.informativeText = "Scribe is downloading and preparing it so nothing you say is lost. Try again in a minute."
+            alert.informativeText = "Wait for the model to finish downloading and loading before recording. Check its progress in Settings."
             alert.addButton(withTitle: "OK")
             alert.runModal()
         case .failed(let message):
@@ -347,13 +347,13 @@ final class AppModel {
         }
     }
 
-    /// Deletes a finished meeting: transcript, notes and summary (via cascade) plus its audio files.
+    /// Deletes a finished meeting and its transcript, notes, summary, and old audio files.
     func deleteMeeting(_ meeting: Meeting) {
         if let current, current.id == meeting.id, current.isLive, current.state != .finished { return }
         NSApp.activate()
         let alert = NSAlert()
-        alert.messageText = "Delete “\(meeting.title)”?"
-        alert.informativeText = "This deletes the transcript, notes, summary and any old audio recordings. Todos are kept without a meeting link. It can't be undone."
+        alert.messageText = "Delete \"\(meeting.title)\"?"
+        alert.informativeText = "This deletes the transcript, notes, summary, and any old audio recordings. Scribe keeps the todos without a meeting link. You can't undo this."
         alert.alertStyle = .warning
         alert.addButton(withTitle: "Delete").hasDestructiveAction = true
         alert.addButton(withTitle: "Cancel")
@@ -486,13 +486,13 @@ final class AppModel {
     }
 
     private func makeQA(_ llm: any LLMProvider) -> QAEngine {
-        // A misconfigured search provider (e.g. no API key) falls back to the AI provider's own search.
+        // Use the AI provider's search if the search provider lacks valid settings, such as an API key.
         let webSearch = settings.webSearchProviderID.flatMap { try? makeProvider(Providers.webSearch, id: $0) }
         let searchGate = settings.searchGateProviderID.flatMap { try? makeProvider(Providers.searchGate, id: $0) }
         return QAEngine(llm: llm, webSearch: webSearch, searchGate: searchGate, vocabulary: settings.vocabulary.terms)
     }
 
-    /// Corrections made in a meeting's chat land in Settings ▸ Vocabulary.
+    /// Saves corrections from a meeting's chat in Settings ▸ Vocabulary.
     private func learnCorrection(term: String, heardAs: String) throws -> VocabularyEntry {
         try settings.vocabulary.learn(term, heardAs: heardAs)
     }

@@ -1,20 +1,19 @@
 import AppKit
 import SwiftUI
 
-/// Near-neutral grays with the faintest warmth, ink for primary actions and one soft indigo for highlights.
-/// Every color adapts to light and dark.
+/// Gray backgrounds, contrasting primary actions, and indigo highlights with light and dark variants.
 enum Theme {
     static let background = Color(light: 0xFFFFFF, dark: 0x212121)
     static let sidebar = Color(light: 0xF8F8F7, dark: 0x181818)
     static let surface = Color(light: 0xFFFFFF, dark: 0x2F2F2F)
-    /// User-authored content: my transcript lines, my questions.
+    /// Background for the user's transcript lines and questions.
     static let bubble = Color(light: 0xF2F2F1, dark: 0x303030)
     static let hover = Color(light: 0xECECEB, dark: 0x2A2A2A)
     static let border = Color(light: 0xE6E6E4, dark: 0x383838)
     static let text = Color(light: 0x0D0D0D, dark: 0xECECEC)
     static let secondary = Color(light: 0x5D5D5B, dark: 0xB4B4B4)
     static let tertiary = Color(light: 0x8F8F8C, dark: 0x8A8A8A)
-    /// Primary actions are ink: black on light, white on dark.
+    /// Primary actions use black in light mode and white in dark mode.
     static let accent = Color(light: 0x0D0D0D, dark: 0xECECEC)
     /// Text and icons drawn on `accent`.
     static let onAccent = Color(light: 0xFFFFFF, dark: 0x0D0D0D)
@@ -23,17 +22,17 @@ enum Theme {
     static let recording = Color(light: 0xE5484D, dark: 0xF2555A)
     static let flag = Color(light: 0xD4A017, dark: 0xE8B83A)
 
-    /// Page titles only (Meetings, Settings, the greeting); everything else is the system sans.
+    /// Serif font for page titles. Other text uses the system sans-serif font.
     static func serif(_ size: CGFloat, weight: Font.Weight = .regular) -> Font {
         .system(size: size, weight: weight, design: .serif)
     }
 }
 
-/// Motion: critically damped springs under 300 ms, so nothing overshoots or lingers.
+/// Spring animations under 300 ms without overshoot.
 enum Motion {
-    /// State changes: a panel appearing, the summary replacing the transcript.
+    /// Panel and summary transitions.
     static let standard = Animation.smooth(duration: 0.28)
-    /// Small, frequent things: a note or message arriving, a tag chip.
+    /// Note, message, and tag updates.
     static let quick = Animation.smooth(duration: 0.2)
     static let press = Animation.easeOut(duration: 0.12)
 }
@@ -56,11 +55,10 @@ private struct MotionModifier<V: Equatable>: ViewModifier {
 }
 
 extension AnyTransition {
-    /// Rises a few points into place while fading in, slightly blurred so the two states read as one.
-    /// Under Reduce Motion it only fades.
+    /// Moves up 6 points while fading in and removing a 2-point blur. Reduce Motion keeps only the fade.
     static var rise: AnyTransition { .modifier(active: RiseEffect(progress: 0), identity: RiseEffect(progress: 1)) }
 
-    /// `.rise`, also growing from 96% out of `anchor`, for things that come from a corner, like a chat bubble from its tail.
+    /// Adds scaling from 96% around `anchor` to `.rise`.
     static func rise(from anchor: UnitPoint) -> AnyTransition {
         .modifier(active: RiseEffect(progress: 0, anchor: anchor), identity: RiseEffect(progress: 1, anchor: anchor))
     }
@@ -81,14 +79,14 @@ private struct RiseEffect: ViewModifier {
 }
 
 extension View {
-    /// Rises into place, like `.rise`, once `isShown` turns true, after `delay`. For staggered entrances of views
-    /// that are already laid out, so a group can arrive one by one without blocking interaction.
+    /// Applies the rise effect when `isShown` becomes true, after `delay`.
+    /// Views keep their layout positions during the animation.
     func rise(isShown: Bool, delay: Double = 0) -> some View {
         modifier(RiseEffect(progress: isShown ? 1 : 0)).motion(Motion.standard.delay(delay), value: isShown)
     }
 }
 
-/// Scales to 0.97 while pressed, so every click is acknowledged on mouse-down.
+/// Scales to 0.97 while pressed.
 struct PressableStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
@@ -97,7 +95,7 @@ struct PressableStyle: ButtonStyle {
     }
 }
 
-/// A filled capsule: the accent for the main action, red while recording.
+/// A filled capsule button. Uses the accent color by default.
 struct CapsuleButtonStyle: ButtonStyle {
     var fill: Color = Theme.accent
     var foreground: Color = Theme.onAccent
@@ -115,7 +113,7 @@ struct CapsuleButtonStyle: ButtonStyle {
     }
 }
 
-/// A quiet bordered capsule for secondary actions.
+/// A bordered capsule button for secondary actions.
 struct QuietButtonStyle: ButtonStyle {
     @Environment(\.isEnabled) private var isEnabled
 
@@ -132,7 +130,7 @@ struct QuietButtonStyle: ButtonStyle {
     }
 }
 
-/// The rounded card that holds a text input, like a chat composer.
+/// A rounded text-input container with a focus border.
 struct ComposerCard<Content: View>: View {
     var isFocused = false
     @ViewBuilder var content: Content
@@ -183,8 +181,7 @@ extension Color {
     }
 }
 
-/// Scribe's mark in an ink rounded square, beside the wordmark. The mark is drawn by scripts/make-icons.swift,
-/// which also makes the app icon and the menu bar icon from it.
+/// Scribe's mark beside its name. `scripts/make-icons.swift` generates the mark and app icons.
 struct ScribeLogo: View {
     var body: some View {
         HStack(spacing: 8) {

@@ -1,8 +1,8 @@
 import Core
 import Foundation
 
-/// The note being typed. Its timestamp is anchored when typing *starts*, not when it's committed,
-/// so the note lines up with what was being said when the thought began.
+/// The draft note. Its timestamp records when typing starts, not when the note is committed,
+/// so it matches the speech at that time.
 public struct NoteDraft: Sendable, Equatable {
     public private(set) var text = ""
     public private(set) var anchor: TimeInterval?

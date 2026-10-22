@@ -9,8 +9,7 @@ struct SummaryView: View {
     var fix: ((UncertainTerm) -> Void)?
     var dismiss: ((UncertainTerm) -> Void)?
     @State private var copied = false
-    /// False while summarizing, then true once the summary is on screen, so its sections stagger in as it arrives.
-    /// A summary that's already there when the view opens just appears.
+    /// Animates sections after a new summary appears. Existing summaries appear without an entrance animation.
     @State private var revealed = true
 
     var body: some View {
@@ -137,14 +136,14 @@ private struct UncertainTermsSection: View {
                 }
                 ForEach(terms, id: \.self) { term in
                     HStack(alignment: .firstTextBaseline, spacing: 8) {
-                        Text("“\(term.heard)”").foregroundStyle(Theme.secondary)
+                        Text("\"\(term.heard)\"").foregroundStyle(Theme.secondary)
                         Image(systemName: "arrow.right").font(.system(size: 11)).foregroundStyle(Theme.tertiary)
                         Text(term.suggestion)
                         Spacer()
                         if let fix {
                             Button("Fix") { fix(term) }
                                 .buttonStyle(QuietButtonStyle())
-                                .help("Replace “\(term.heard)” with “\(term.suggestion)” in this transcript and save it to your vocabulary")
+                                .help("Replace \"\(term.heard)\" with \"\(term.suggestion)\" in this transcript and save the correction to your vocabulary")
                         }
                         if let dismiss {
                             Button("Dismiss", systemImage: "xmark") { dismiss(term) }

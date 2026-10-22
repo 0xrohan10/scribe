@@ -2,7 +2,7 @@ import Core
 import Foundation
 
 /// Supplies the transcript text the LLM sees for a question.
-/// Seam for long meetings: swap in chunked summaries or retrieval without touching `QAEngine`.
+/// Supports chunked summaries or retrieval for long meetings without changes to `QAEngine`.
 public protocol TranscriptContextProvider: Sendable {
     func context(for question: String, transcript: Transcript) async -> String
 }
@@ -91,10 +91,10 @@ public struct QAEngine: Sendable {
                     let transcriptText = await contextProvider.context(for: question, transcript: transcript)
                     var prompt = question
                     var tools: [LLMTool] = []
-                    // A configured search tool wins over the provider's hosted search, so the choice in
-                    // Settings holds whichever model answers.
+                    // Use the configured search tool instead of hosted search to preserve the
+                    // Settings choice regardless of which model answers.
                     if let webSearch {
-                        // A failed gate call shouldn't cost the user an answer, so it falls back to searching.
+                        // Search if the gate call fails so the user can still get an answer.
                         let search = await (try? searchGate?.shouldSearch(question: question, transcript: transcript)) ?? true
                         if search {
                             continuation.yield(.activity("Searching the web…"))

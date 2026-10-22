@@ -85,7 +85,7 @@ struct GRDBTodoRepository: TodoRepository {
     }
 }
 
-/// Adds only new summary actions. The ledger prevents regeneration from resurrecting deleted tasks.
+/// Adds only new summary actions. The ledger prevents regenerated summaries from restoring deleted tasks.
 /// Existing todos are user-owned: importing never changes their title, owner, date, or completion.
 func importTodos(from summary: MeetingSummary, in db: Database) throws {
     guard let meeting = try MeetingRecord.fetchOne(db, key: summary.meetingID)?.model else { return }

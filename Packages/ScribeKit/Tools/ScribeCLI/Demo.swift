@@ -123,7 +123,7 @@ struct Demo: AsyncParsableCommand {
         }
         if !tag.isEmpty { try await database.library.setTags(tag, meetingID: session.meetingID) }
 
-        print("\n— saved \(db ?? "in memory") —\n")
+        print("\nSaved \(db ?? "in memory")\n")
         try await dumpMeeting(await session.meeting, in: database)
     }
 }

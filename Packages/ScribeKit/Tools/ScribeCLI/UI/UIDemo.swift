@@ -13,7 +13,7 @@ struct UIDemo: AsyncParsableCommand {
     @Option(help: "The Debug app bundle.")
     var app = UISession.defaultAppPath
 
-    @Flag(help: "Leave the app running afterwards, e.g. to poke at it with the other `scribe ui` commands.")
+    @Flag(help: "Leave the app running for use with other `scribe ui` commands.")
     var keepOpen = false
 
     func run() async throws {
@@ -31,7 +31,7 @@ struct UIDemo: AsyncParsableCommand {
         }
         /// The first element matching `query` whose text contains `text`.
         func waitFor(_ query: String, containing text: String, timeout: Double = 10) async throws -> Element {
-            try await app.wait("“\(query)” containing “\(text)”", timeout: timeout) { app.all(query).first { $0.text.contains(text) } }
+            try await app.wait("'\(query)' containing '\(text)'", timeout: timeout) { app.all(query).first { $0.text.contains(text) } }
         }
 
         try await step("launch with fakes") {}
@@ -53,7 +53,7 @@ struct UIDemo: AsyncParsableCommand {
             guard !row.text.contains("!") else { throw UIError("The ! wasn't stripped: \(row.text)") }
         }
 
-        try await step("“what did they just say?” is answered from the transcript") {
+        try await step("'what did they just say?' is answered from the transcript") {
             try app.press("Ask")  // The side panel's tab.
             try await app.type("what did they just say?", into: try app.find("ask.field"), submit: true)
             _ = try await waitFor("ask.answer", containing: "They said")

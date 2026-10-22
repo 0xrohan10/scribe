@@ -41,7 +41,7 @@ import Testing
     }
 
     /// `MeetingSession` re-saves the meeting (end time, title, template) after segments exist. An
-    /// INSERT OR REPLACE save would delete the row and cascade away the transcript and notes.
+    /// INSERT OR REPLACE save would delete the row and cascade the deletion to its transcript and notes.
     @Test func resavingMeetingKeepsChildren() async throws {
         var meeting = Meeting(title: "m")
         try await db.meetings.save(meeting)

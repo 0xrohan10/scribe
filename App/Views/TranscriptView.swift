@@ -68,7 +68,7 @@ struct TranscriptView: View {
     }
 }
 
-/// Like a chat: what I said sits in a bubble on the right, everyone else reads as plain text.
+/// The user's speech appears in bubbles on the right. Other speech appears as plain text.
 private struct SegmentRow: View {
     let segment: TranscriptSegment
     var isAnchored = false

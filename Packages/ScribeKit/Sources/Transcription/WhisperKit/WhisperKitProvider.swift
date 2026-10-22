@@ -18,7 +18,7 @@ public struct WhisperKitProvider: LocalModelProvider {
         self.vocabulary = config.vocabulary
     }
 
-    /// Large-v3 turbo, quantized: near large-v3 accuracy at a fraction of the size, fast enough to keep up live.
+    /// Quantized large-v3 turbo. Smaller than large-v3 with similar accuracy and fast enough for live transcription.
     public static let defaultModel = "openai_whisper-large-v3-v20240930_turbo_632MB"
 
     public func prepare() async throws {
@@ -64,8 +64,8 @@ public struct WhisperKitProvider: LocalModelProvider {
                         }
                     }
 
-                    // Reading audio never waits on Whisper. If it did, a slow decode would back the capture stream
-                    // up until it dropped audio, and the segmenter would stitch the leftovers into nonsense.
+                    // Read audio without waiting for Whisper. A slow decode could otherwise block capture,
+                    // drop audio, and cause the segmenter to combine unrelated speech.
                     try await withThrowingTaskGroup(of: Void.self) { group in
                         group.addTask {
                             let converter = PCMConverter(to: format)
@@ -116,7 +116,7 @@ struct UtteranceSegmenter {
     var floorWindow: TimeInterval = 10
     /// Trailing silence that ends an utterance.
     var endSilence: TimeInterval = 1
-    /// Shorter utterances keep listening through pauses; Whisper does badly on 1 s clips with no context.
+    /// For shorter utterances, wait through pauses. Whisper is less accurate on 1 s clips with no context.
     var minDuration: TimeInterval = 3
     var partialInterval: TimeInterval = 1
     /// Whisper's window is 30 s; cut before it so nothing is dropped.
@@ -195,8 +195,8 @@ struct UtteranceSegmenter {
     }
 }
 
-/// Utterances waiting for Whisper. Finals wait their turn; a partial is replaced by whatever arrives after it,
-/// since that re-decodes the same audio with more on the end. So partials slow down rather than pile up when decoding lags.
+/// Utterances queued for Whisper. Keeps finals and replaces each pending partial with the next utterance,
+/// which includes the same audio. This prevents partials from accumulating when decoding is slow.
 struct DecodeQueue {
     private(set) var pending: [UtteranceSegmenter.Utterance] = []
 
@@ -276,7 +276,7 @@ struct LoadedWhisper: @unchecked Sendable {
     func transcribe(_ samples: [Float], options: DecodingOptions, glossary: [Int], previous: String) async throws -> String {
         var options = options
         if let tokenizer = kit.tokenizer {
-            // The tail of the last line is the useful part of it.
+            // Use the end of the last line for recent context.
             let previous = previous.isEmpty ? [] : encode(" " + previous, tokenizer).suffix(Self.promptBudget - glossary.count)
             let prompt = glossary + previous
             if !prompt.isEmpty { options.promptTokens = prompt }

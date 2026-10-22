@@ -1,7 +1,6 @@
-// Draws Scribe's mark and writes the app's icons from it:
-//   App/AppIcon.icon                      the app icon, as a layered Icon Composer document, so macOS 26 draws its own
-//                                         shape and glass instead of boxing a flat icon inside a gray tile
-//   App/Assets.xcassets/ScribeMark.imageset  the bare mark as a vector template image (menu bar icon, sidebar logo)
+// Draws Scribe's mark and writes the app's icons:
+//   App/AppIcon.icon                      a layered Icon Composer document. macOS 26 applies the icon shape and glass.
+//   App/Assets.xcassets/ScribeMark.imageset  a vector template image for the menu bar icon and sidebar logo
 // Rerun after changing the mark:
 //
 //   swift scripts/make-icons.swift
@@ -29,7 +28,7 @@ func markSVG() -> String {
     return #"<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">"# + rects.joined() + "</svg>"
 }
 
-/// Ink with a soft top light behind a glass layer of bars.
+/// A dark gradient behind translucent bars.
 let iconJSON = """
     {
       "fill" : {
@@ -54,7 +53,7 @@ let iconJSON = """
     }
     """
 
-/// The bare mark as a one-page PDF, 18×18 pt with a little air, for template rendering.
+/// The mark as a one-page PDF, 18×18 pt with margins, for template rendering.
 func markPDF() -> Data {
     let data = NSMutableData()
     var box = CGRect(x: 0, y: 0, width: 18, height: 18)
