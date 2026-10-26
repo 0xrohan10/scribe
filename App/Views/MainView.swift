@@ -38,6 +38,8 @@ struct MainView: View {
                 LibraryQuestionsView(app: app, model: app.libraryQuestions).transition(.opacity)
             case .todos:
                 TodosView(app: app, model: app.todos).transition(.opacity)
+            case .upcoming:
+                UpcomingView(app: app, model: app.calendars).transition(.opacity)
             case .meeting:
                 if let vm = app.shown {
                     MeetingView(vm: vm, app: app).id(vm.id).transition(.opacity)
@@ -78,6 +80,8 @@ struct Sidebar: View {
                         .accessibilityIdentifier("sidebar.all")
                     SidebarRow(title: "Todos", icon: "checklist", count: app.todos.openCount, isSelected: app.route == .todos) { app.showTodos() }
                         .accessibilityIdentifier("sidebar.todos")
+                    SidebarRow(title: "Upcoming", icon: "calendar", isSelected: app.route == .upcoming) { app.route = .upcoming }
+                        .accessibilityIdentifier("sidebar.upcoming")
                     SidebarRow(title: "Ask your meetings", icon: "text.bubble", isSelected: app.route == .libraryQuestions) { app.showLibraryQuestions() }
                         .accessibilityIdentifier("sidebar.askMeetings")
                     row("Unfiled", icon: "tray", filter: .unfiled)

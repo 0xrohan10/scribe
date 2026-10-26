@@ -9,6 +9,27 @@ struct GRDBMeetingRepository: MeetingRepository {
         try await writer.write { try MeetingRecord(meeting).save($0) }
     }
 
+    func rename(id: UUID, to title: String) async throws {
+        try await writer.write { db in
+            let changed = try MeetingRecord.filter(key: id).updateAll(db, Column("title").set(to: title))
+            guard changed == 1 else { throw CocoaError(.fileNoSuchFile) }
+        }
+    }
+
+    func setTemplate(id: UUID, to templateID: String) async throws {
+        try await writer.write { db in
+            let changed = try MeetingRecord.filter(key: id).updateAll(db, Column("templateID").set(to: templateID))
+            guard changed == 1 else { throw CocoaError(.fileNoSuchFile) }
+        }
+    }
+
+    func finish(id: UUID, at endedAt: Date) async throws {
+        try await writer.write { db in
+            let changed = try MeetingRecord.filter(key: id).updateAll(db, Column("endedAt").set(to: endedAt))
+            guard changed == 1 else { throw CocoaError(.fileNoSuchFile) }
+        }
+    }
+
     func meeting(id: UUID) async throws -> Meeting? {
         try await writer.read { try MeetingRecord.fetchOne($0, key: id)?.model }
     }

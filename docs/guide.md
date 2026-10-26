@@ -17,6 +17,7 @@ Packages/ScribeKit/       one SwiftPM target per domain; domains import only Cor
   Session/                MeetingSession manages meeting state, per-source transcription, and persistence
   Persistence/            GRDB database + repositories, DiskAudioFileStore
   Settings/               AppSettings (UserDefaults), KeychainSecretStore
+  GoogleCalendar/         read-only Google Calendar client, OAuth loopback sign-in, PKCE
   Fixtures/               fake audio and an echo LLM for the `scribe` CLI and the app's --ui-testing mode
   Tools/TapCheck/         `scribe-tapcheck` CLI for testing process taps
   Tools/ScribeCLI/        `scribe` dev-debugging CLI: fake meetings, database dumps, search-gate scores, UI driving
@@ -43,6 +44,8 @@ cd Packages/ScribeKit && swift test
 
 Run `swift test --sanitize=thread` after changing capture or session code. `CaptureSinkTests` can detect recording-file races only with Thread Sanitizer enabled.
 
+Run app-model tests with `xcodebuild test -project Scribe.xcodeproj -scheme Scribe -destination 'platform=macOS'`. These tests use isolated preferences and an in-memory secret store.
+
 Debug builds can render the main screens with demo data, without permissions or API keys. Run the built app binary with `--screenshots <dir>`, for example `build/DerivedData/Build/Products/Debug/Scribe.app/Contents/MacOS/Scribe --screenshots build/screenshots`.
 
 The `scribe` CLI has three debugging commands:
@@ -66,6 +69,8 @@ cd Packages/ScribeKit && swift run scribe ui demo
 ```
 
 Use `launch`, `menu`, `press`, `type`, `wait`, `read`, `tree`, `screenshot`, and `quit` to test other flows. Queries match accessibility identifiers such as `notes.add`, titles, or labels. Run `scribe ui tree` to list them.
+
+After building Debug, run `swift scripts/check-calendar-ui.swift` from the repo root to check Google Calendar setup, configuration save, and Upcoming navigation. This starts a separate app instance with fake providers and temporary meeting data. It does not open Google sign-in or use real credentials. The terminal needs Accessibility access.
 
 One drawing generates the app icon at `App/AppIcon.icon` and the menu bar mark, `ScribeMark` in `App/Assets.xcassets`. After changing the drawing, run `swift scripts/make-icons.swift`.
 
@@ -105,6 +110,26 @@ Settings shows the selected Cohere or Whisper model's download progress, loading
 
 To download a missing model, choose **Download Model** or accept the prompt when starting capture. Cached models load when selected or when Scribe starts. A deleted model does not download again on launch. Cohere uses the shared Hugging Face cache. Its delete confirmation warns that other apps may use the same files. Deleting a Whisper model removes only the selected variant.
 
+## Google Calendar
+
+Choose **Settings ▸ Google Calendar** to connect Google accounts. Select the calendars to show for each account. **Upcoming** shows timed events for the next seven days, including meetings in progress. All-day events, cancelled events, and events you declined are not shown. Times use your Mac's time zone. The page refreshes when opened and once per minute while open. Use **Refresh** to check again.
+
+Choose **Start recording** beside an event to create a meeting with its title. This uses the normal recording permissions and transcription settings. It does not join a call, open a meeting link, or start recording automatically. Scribe does not change Google Calendar events.
+
+### Set up Google sign-in
+
+This source build needs your own Google OAuth configuration:
+
+1. In [Google Cloud Console](https://console.cloud.google.com/), create or select a project and enable **Google Calendar API**.
+2. Configure the OAuth consent screen. For an external app in Testing, add the Google accounts you will connect as test users. Add the read-only Calendar list and event scopes (`https://www.googleapis.com/auth/calendar.calendarlist.readonly` and `https://www.googleapis.com/auth/calendar.events.readonly`), plus `openid` and `email`.
+3. Create an OAuth client with application type **Desktop app**. Do not use a Web application client.
+4. In Scribe's calendar settings, enter the client ID and the client secret if Google supplied one. Choose **Save configuration**, then **Add Google account**.
+5. Complete sign-in in your browser. Scribe receives the result through a temporary local loopback listener. The primary calendar is selected by default. You can select other calendars or add another account.
+
+Use **Add Google account** to sign in again if access expires. External Google apps in Testing can have refresh tokens that expire after seven days. A distributed app needs its own OAuth consent and verification setup. Disconnect all accounts before changing the OAuth client configuration.
+
+Scribe stores refresh tokens and the optional client secret in Keychain. It stores account emails, calendar names, and selections in local preferences. Upcoming event data stays in memory; starting a recording saves its title in the local meeting database. **Disconnect** removes that account's local credentials and events. It does not delete saved meetings or revoke the Google grant. To revoke access, remove Scribe in your Google account's third-party connections settings.
+
 ## Todos
 
 Choose **Todos** in the sidebar to manage tasks without starting a meeting. Enter a title to add a task. Click a task to edit its owner, notes, and due date. Use the circle to complete or reopen it. Filter with **Open**, **Today**, or **Completed**. Today includes overdue tasks. Search matches task text, owners, and meeting titles.
@@ -126,6 +151,12 @@ Search uses keyword matching and limits the excerpts it selects from each meetin
 Microphone and system audio have separate status labels in the meeting view. If a transcriber throws an error or ends unexpectedly, Scribe restarts that track. The meeting and the other track continue. Scribe also restarts a transcriber if it receives speech-like audio but produces no new results for 60 seconds. Quiet audio alone does not trigger this check.
 
 Scribe retries up to three times with increasing delays. If retries fail, use **Retry** beside the affected track. Scribe keeps final text and saves partial text before a restart. Retries use only the most recent 30 seconds of unconfirmed audio in memory, with no audio files. Scribe cannot recover older audio outside that buffer and warns if text may be missing. Stopping capture cancels pending retries.
+
+## Meeting titles
+
+When a recording ends, Scribe uses the selected AI provider to create a short title from the transcript. This also runs when automatic summaries are off. If no AI provider is available or the transcript is empty, the current title stays unchanged. A title-generation error does not prevent the summary from completing.
+
+Edit the title and choose **Save**, or press Return, to save your own title. This works during recording and when reviewing a saved meeting. Changes are not saved while you type. A title you save during recording takes priority over the generated title, including while an AI request is in progress.
 
 ## Audio storage
 

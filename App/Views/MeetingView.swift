@@ -53,10 +53,17 @@ struct MeetingView: View {
     private var header: some View {
         HStack(alignment: .top, spacing: 12) {
             VStack(alignment: .leading, spacing: 8) {
-                TextField("Title", text: Binding(get: { vm.meeting.title }, set: { vm.rename($0) }))
-                    .textFieldStyle(.plain)
-                    .font(.system(size: 22, weight: .semibold))
-                    .accessibilityIdentifier("meeting.title")
+                HStack(spacing: 8) {
+                    TextField("Title", text: $vm.titleDraft)
+                        .textFieldStyle(.plain)
+                        .font(.system(size: 22, weight: .semibold))
+                        .accessibilityIdentifier("meeting.title")
+                        .onSubmit { saveTitle() }
+                    Button(vm.isSavingTitle ? "Saving…" : "Save") { saveTitle() }
+                        .buttonStyle(QuietButtonStyle())
+                        .disabled(!vm.canSaveTitle)
+                        .accessibilityIdentifier("meeting.title.save")
+                }
                 HStack(spacing: 10) {
                     StateBadge(state: vm.state).accessibilityIdentifier("meeting.state")
                     if vm.isRecording {
@@ -133,6 +140,13 @@ struct MeetingView: View {
                 .accessibilityIdentifier("meeting.panel")
         }
         .motion(Motion.quick, value: vm.state)
+    }
+
+    private func saveTitle() {
+        Task {
+            await vm.saveTitle()
+            await app.refreshRecent()
+        }
     }
 
     private var isFailed: Bool {

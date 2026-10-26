@@ -2,6 +2,10 @@ import Foundation
 
 public protocol MeetingRepository: Sendable {
     func save(_ meeting: Meeting) async throws
+    /// Changes only the title of an existing meeting.
+    func rename(id: UUID, to title: String) async throws
+    func setTemplate(id: UUID, to templateID: String) async throws
+    func finish(id: UUID, at endedAt: Date) async throws
     func meeting(id: UUID) async throws -> Meeting?
     func recent(limit: Int) async throws -> [Meeting]
     func delete(id: UUID) async throws

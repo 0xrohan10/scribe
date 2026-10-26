@@ -15,6 +15,7 @@ enum Route: Hashable {
     case library
     case libraryQuestions
     case todos
+    case upcoming
     case meeting
     case settings
 }
@@ -52,6 +53,7 @@ final class AppModel {
     let secrets: any SecretStore
     let library: LibraryModel
     let todos: TodosModel
+    let calendars: CalendarModel
     let libraryQuestions = LibraryQuestionsModel()
     @ObservationIgnored private let settingsStore: SettingsStore
     @ObservationIgnored private let database: ScribeDatabase
@@ -60,6 +62,8 @@ final class AppModel {
     @ObservationIgnored private let prompter = MeetingPrompter()
     @ObservationIgnored private let mainWindow = MainWindowController()
     @ObservationIgnored private var isSwitchingMeetings = false
+    /// Keeps edits routed through a session until its AI work finishes.
+    @ObservationIgnored private var activeMeetings: [UUID: MeetingViewModel] = [:]
     /// Real hardware and providers, swapped for fakes in UI-testing mode.
     @ObservationIgnored private var makeSources: @Sendable (SystemAudioScope) -> [any AudioSource] = { [MicrophoneSource(), SystemAudioSource(scope: $0)] }
     @ObservationIgnored private var requestMicrophone: @Sendable () async -> Bool = { await MicrophoneSource.requestPermission() }
@@ -74,6 +78,7 @@ final class AppModel {
     init() {
         let support = URL.applicationSupportDirectory.appending(path: "Scribe", directoryHint: .isDirectory)
         secrets = KeychainSecretStore()
+        calendars = CalendarModel(secrets: secrets)
         settingsStore = SettingsStore()
         settings = settingsStore.load()
         audioFiles = DiskAudioFileStore(root: support.appending(path: "Recordings", directoryHint: .isDirectory))
@@ -97,8 +102,11 @@ final class AppModel {
     #if DEBUG
     /// Uses in-memory stores for screenshots without detection, notifications, Keychain, or saved settings.
     init(preview settings: AppSettings, secrets: any SecretStore, database: ScribeDatabase) {
+        let defaults = UserDefaults(suiteName: "scribe.preview")!
+        defaults.removePersistentDomain(forName: "scribe.preview")
         self.secrets = secrets
-        settingsStore = SettingsStore(defaults: UserDefaults(suiteName: "scribe.preview")!)
+        calendars = CalendarModel(secrets: secrets, defaults: defaults)
+        settingsStore = SettingsStore(defaults: defaults)
         self.settings = settings
         self.database = database
         library = LibraryModel(repository: database.library)
@@ -149,7 +157,7 @@ final class AppModel {
     // MARK: Meetings
 
     /// Scribe records one meeting at a time. If one is still capturing, ask before stopping it.
-    func startMeeting(from detected: DetectedMeeting? = nil) {
+    func startMeeting(from detected: DetectedMeeting? = nil, title: String? = nil) {
         guard !isSwitchingMeetings else { return }
         guard let transcriberID = settings.transcriptionProviderID else {
             askToChooseTranscriber()
@@ -160,7 +168,7 @@ final class AppModel {
             return
         }
         guard let current, current.isCapturing else {
-            beginMeeting(from: detected, transcriberID: transcriberID)
+            beginMeeting(from: detected, transcriberID: transcriberID, title: title)
             return
         }
         guard confirmStopping(current) else {
@@ -171,7 +179,7 @@ final class AppModel {
         Task {
             await current.stopCapture()
             isSwitchingMeetings = false
-            beginMeeting(from: detected, transcriberID: transcriberID)
+            beginMeeting(from: detected, transcriberID: transcriberID, title: title)
         }
     }
 
@@ -220,24 +228,29 @@ final class AppModel {
         if alert.runModal() == .alertFirstButtonReturn { showSettings() }
     }
 
-    private func beginMeeting(from detected: DetectedMeeting?, transcriberID: String) {
+    private func beginMeeting(from detected: DetectedMeeting?, transcriberID: String, title: String?) {
         prompter.withdrawRecordPrompt()
         do {
             let transcriber = try makeProvider(Providers.transcription, id: transcriberID)
             let llm = makeLLM()
-            let meeting = Meeting(title: Self.defaultTitle(for: detected?.app), app: detected?.app, templateID: settings.defaultTemplateID)
+            let meeting = Meeting(title: title ?? Self.defaultTitle(for: detected?.app), app: detected?.app, templateID: settings.defaultTemplateID)
             let environment = SessionEnvironment(
                 makeSources: makeSources,
                 transcriber: transcriber,
                 summarizer: settings.summarizeWhenMeetingEnds ? llm.map(makeSummarizer) : nil,
                 meetings: database.meetings, transcripts: database.transcripts, notes: database.notes,
-                summaries: database.summaries, vocabulary: settings.vocabulary)
+                summaries: database.summaries, vocabulary: settings.vocabulary,
+                titleGenerator: llm.map { LLMTitleGenerator(llm: $0) })
             let session = MeetingSession(meeting: meeting, scope: systemAudioScope(for: detected), environment: environment)
             let vm = MeetingViewModel(
                 meeting: meeting, session: session,
                 notes: NotesController(meetingID: meeting.id, clock: session.clock, repository: database.notes),
                 qa: llm.map(makeQA), summarizer: llm.map(makeSummarizer),
-                summaries: database.summaries, transcripts: database.transcripts, learn: learnCorrection, onFinish: { [weak self] in Task { await self?.refreshRecent() } })
+                summaries: database.summaries, transcripts: database.transcripts, learn: learnCorrection, onFinish: { [weak self] in
+                    self?.activeMeetings[meeting.id] = nil
+                    Task { await self?.refreshRecent() }
+                })
+            activeMeetings[meeting.id] = vm
             current = vm
             show(vm)
             Task {
@@ -333,12 +346,16 @@ final class AppModel {
             showCurrentMeeting()
             return
         }
+        if let active = activeMeetings[meeting.id] {
+            show(active)
+            return
+        }
         Task {
             do {
                 let llm = makeLLM()
                 let vm = try await MeetingViewModel.review(
                     meeting, transcripts: database.transcripts, noteRepository: database.notes, summaries: database.summaries,
-                    qa: llm.map(makeQA), summarizer: llm.map(makeSummarizer), learn: learnCorrection)
+                    qa: llm.map(makeQA), summarizer: llm.map(makeSummarizer), meetings: database.meetings, learn: learnCorrection)
                 if !isCapturing { current = vm }
                 show(vm)
             } catch {
@@ -349,6 +366,7 @@ final class AppModel {
 
     /// Deletes a finished meeting and its transcript, notes, summary, and old audio files.
     func deleteMeeting(_ meeting: Meeting) {
+        guard activeMeetings[meeting.id] == nil else { return }
         if let current, current.id == meeting.id, current.isLive, current.state != .finished { return }
         NSApp.activate()
         let alert = NSAlert()

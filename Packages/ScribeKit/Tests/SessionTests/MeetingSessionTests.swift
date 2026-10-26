@@ -58,9 +58,38 @@ private actor MemoryStore: MeetingRepository, TranscriptRepository, NoteReposito
     var segments: [UUID: TranscriptSegment] = [:]
     var notesByID: [UUID: Note] = [:]
     var summaries: [UUID: MeetingSummary] = [:]
+    var failNextTitleSave = false
+    var renameGate: AsyncStream<Void>?
+    var isRenaming = false
+    var renameAcknowledgementGate: AsyncStream<Void>?
+    var didCommitRename = false
 
+    func failNextRename() { failNextTitleSave = true }
+    func holdNextRename(_ gate: AsyncStream<Void>) { renameGate = gate }
+    func holdRenameAcknowledgement(_ gate: AsyncStream<Void>) { renameAcknowledgementGate = gate }
     func save(_ meeting: Meeting) { meetings[meeting.id] = meeting }
+    func rename(id: UUID, to title: String) async throws {
+        if let gate = renameGate {
+            renameGate = nil
+            isRenaming = true
+            for await _ in gate {}
+            isRenaming = false
+        }
+        if failNextTitleSave {
+            failNextTitleSave = false
+            throw CocoaError(.fileWriteUnknown)
+        }
+        guard meetings[id] != nil else { throw CocoaError(.fileNoSuchFile) }
+        meetings[id]?.title = title
+        if let gate = renameAcknowledgementGate {
+            renameAcknowledgementGate = nil
+            didCommitRename = true
+            for await _ in gate {}
+        }
+    }
     func meeting(id: UUID) -> Meeting? { meetings[id] }
+    func setTemplate(id: UUID, to templateID: String) { meetings[id]?.templateID = templateID }
+    func finish(id: UUID, at endedAt: Date) { meetings[id]?.endedAt = endedAt }
     func recent(limit: Int) -> [Meeting] { Array(meetings.values.prefix(limit)) }
     func delete(id: UUID) { meetings[id] = nil; notesByID[id] = nil }
     func upsert(_ s: [TranscriptSegment], meetingID: UUID) { s.forEach { segments[$0.id] = $0 } }
@@ -74,6 +103,24 @@ private actor MemoryStore: MeetingRepository, TranscriptRepository, NoteReposito
 private struct EchoSummarizer: MeetingSummarizer {
     func summarize(meeting: Meeting, transcript: Transcript, notes: [Note]) async throws -> MeetingSummary {
         MeetingSummary(meetingID: meeting.id, templateID: meeting.templateID, overview: "\(transcript.segments.count) segments, \(notes.count) notes")
+    }
+}
+
+private actor TitleGenerationProbe {
+    var started = false
+    func begin() { started = true }
+}
+
+private struct FakeTitleGenerator: MeetingTitleGenerator {
+    var gate: AsyncStream<Void>?
+    var probe: TitleGenerationProbe?
+    var fails = false
+
+    func title(meeting: Meeting, transcript: Transcript) async throws -> String {
+        await probe?.begin()
+        if let gate { for await _ in gate {} }
+        if fails { throw CocoaError(.fileReadUnknown) }
+        return "Billing migration planning"
     }
 }
 
@@ -104,6 +151,188 @@ private struct StubbornTranscriber: TranscriptionProvider {
 }
 
 @Suite struct MeetingSessionTests {
+    @Test func generatesAndBroadcastsTitleWithoutAutomaticSummary() async throws {
+        let store = MemoryStore()
+        var env = environment(store, sources: [FakeAudioSource(.mic)])
+        env.summarizer = nil
+        env.titleGenerator = FakeTitleGenerator()
+        let session = MeetingSession(meeting: Meeting(title: "Meeting"), scope: .allApps, environment: env)
+        let events = session.events()
+        try await session.start()
+        await session.stop()
+        #expect(await store.meeting(id: session.meetingID)?.title == "Billing migration planning")
+        #expect(await store.summary(meetingID: session.meetingID) == nil)
+        var titles: [String] = []
+        for await case .title(let title) in events { titles.append(title) }
+        #expect(titles == ["Billing migration planning"])
+    }
+
+    @Test func savedTitleWinsOverInFlightGeneration() async throws {
+        let store = MemoryStore()
+        let (gate, continuation) = AsyncStream.makeStream(of: Void.self)
+        defer { continuation.finish() }
+        let probe = TitleGenerationProbe()
+        var env = environment(store, sources: [FakeAudioSource(.mic)])
+        env.titleGenerator = FakeTitleGenerator(gate: gate, probe: probe)
+        let session = MeetingSession(meeting: Meeting(title: "Meeting"), scope: .allApps, environment: env)
+        try await session.start()
+        let stopping = Task { await session.stop() }
+        let deadline = ContinuousClock.now + .seconds(3)
+        while await !probe.started, ContinuousClock.now < deadline {
+            try await Task.sleep(for: .milliseconds(5))
+        }
+        try #require(await probe.started)
+        try await session.rename("  My meeting title  ")
+        continuation.finish()
+        await stopping.value
+        #expect(await store.meeting(id: session.meetingID)?.title == "My meeting title")
+        #expect(await session.meeting.title == "My meeting title")
+    }
+
+    @Test func titleSavedDuringRecordingSkipsGeneration() async throws {
+        let store = MemoryStore()
+        var env = environment(store, sources: [FakeAudioSource(.mic)])
+        env.titleGenerator = FakeTitleGenerator(fails: true)
+        let session = MeetingSession(meeting: Meeting(title: "Meeting"), scope: .allApps, environment: env)
+        let events = session.events()
+        try await session.start()
+        try await session.rename("My title")
+        await session.stop()
+        #expect(await store.meeting(id: session.meetingID)?.title == "My title")
+        var warnings: [String] = []
+        for await case .warning(let warning) in events { warnings.append(warning) }
+        #expect(!warnings.contains { $0.hasPrefix("Title generation failed:") })
+    }
+
+    @Test func failedManualSaveDoesNotDisableAutomaticTitle() async throws {
+        let store = MemoryStore()
+        var env = environment(store, sources: [FakeAudioSource(.mic)])
+        env.titleGenerator = FakeTitleGenerator()
+        let session = MeetingSession(meeting: Meeting(title: "Original"), scope: .allApps, environment: env)
+        try await session.start()
+        await store.failNextRename()
+        await #expect(throws: CocoaError.self) { try await session.rename("Unsaved title") }
+        #expect(await session.meeting.title == "Original")
+        #expect(await store.meeting(id: session.meetingID)?.title == "Original")
+        await session.stop()
+        #expect(await store.meeting(id: session.meetingID)?.title == "Billing migration planning")
+    }
+
+    @Test(arguments: [false, true])
+    func pendingManualSaveKeepsTitleAndEndTimeWhenRecordingStops(fails: Bool) async throws {
+        let store = MemoryStore()
+        let probe = TitleGenerationProbe()
+        var env = environment(store, sources: [FakeAudioSource(.mic)])
+        env.titleGenerator = FakeTitleGenerator(probe: probe)
+        let session = MeetingSession(meeting: Meeting(title: "Original"), scope: .allApps, environment: env)
+        try await session.start()
+        let (gate, release) = AsyncStream.makeStream(of: Void.self)
+        defer { release.finish() }
+        await store.holdNextRename(gate)
+        if fails { await store.failNextRename() }
+        let saving = Task { try await session.rename("My title") }
+        try await waitForRename(store)
+        let stopping = Task { await session.stop() }
+        let deadline = ContinuousClock.now + .seconds(3)
+        while await !probe.started, ContinuousClock.now < deadline {
+            try await Task.sleep(for: .milliseconds(5))
+        }
+        try #require(await probe.started)
+        release.finish()
+        if fails {
+            await #expect(throws: CocoaError.self) { try await saving.value }
+        } else {
+            try await saving.value
+        }
+        await stopping.value
+        #expect(await store.meeting(id: session.meetingID)?.title == (fails ? "Billing migration planning" : "My title"))
+        #expect(await store.meeting(id: session.meetingID)?.endedAt != nil)
+    }
+
+    @Test func manualSaveWaitsForGeneratedTitleWriteThenWins() async throws {
+        let store = MemoryStore()
+        var env = environment(store, sources: [FakeAudioSource(.mic)])
+        env.titleGenerator = FakeTitleGenerator()
+        let session = MeetingSession(meeting: Meeting(title: "Original"), scope: .allApps, environment: env)
+        try await session.start()
+        let (gate, release) = AsyncStream.makeStream(of: Void.self)
+        defer { release.finish() }
+        await store.holdNextRename(gate)
+        let stopping = Task { await session.stop() }
+        try await waitForRename(store)
+        let saving = Task { try await session.rename("My title") }
+        release.finish()
+        try await saving.value
+        await stopping.value
+        #expect(await store.meeting(id: session.meetingID)?.title == "My title")
+        #expect(await session.meeting.title == "My title")
+    }
+
+    @Test func committedManualTitleSurvivesStopBeforeSaveAcknowledgement() async throws {
+        let store = MemoryStore()
+        let probe = TitleGenerationProbe()
+        var env = environment(store, sources: [FakeAudioSource(.mic)])
+        env.titleGenerator = FakeTitleGenerator(probe: probe)
+        let session = MeetingSession(meeting: Meeting(title: "Original"), scope: .allApps, environment: env)
+        try await session.start()
+        let (gate, release) = AsyncStream.makeStream(of: Void.self)
+        defer { release.finish() }
+        await store.holdRenameAcknowledgement(gate)
+        let saving = Task { try await session.rename("My title") }
+        let deadline = ContinuousClock.now + .seconds(3)
+        while await !store.didCommitRename, ContinuousClock.now < deadline {
+            try await Task.sleep(for: .milliseconds(5))
+        }
+        try #require(await store.didCommitRename)
+        let stopping = Task { await session.stop() }
+        while await !probe.started, ContinuousClock.now < deadline {
+            try await Task.sleep(for: .milliseconds(5))
+        }
+        try #require(await probe.started)
+        await session.setTemplate("planning")
+        release.finish()
+        try await saving.value
+        await stopping.value
+        let saved = try #require(await store.meeting(id: session.meetingID))
+        #expect(saved.title == "My title")
+        #expect(saved.endedAt != nil)
+        #expect(saved.templateID == "planning")
+    }
+
+    private func waitForRename(_ store: MemoryStore) async throws {
+        let deadline = ContinuousClock.now + .seconds(3)
+        while await !store.isRenaming, ContinuousClock.now < deadline {
+            try await Task.sleep(for: .milliseconds(5))
+        }
+        try #require(await store.isRenaming)
+    }
+
+    @Test func titleFailureDoesNotPreventSummaryOrCompletion() async throws {
+        let store = MemoryStore()
+        var env = environment(store, sources: [FakeAudioSource(.mic)])
+        env.titleGenerator = FakeTitleGenerator(fails: true)
+        let session = MeetingSession(meeting: Meeting(title: "Original"), scope: .allApps, environment: env)
+        let events = session.events()
+        try await session.start()
+        await session.stop()
+        #expect(await session.state == .finished)
+        #expect(await store.meeting(id: session.meetingID)?.title == "Original")
+        #expect(await store.summary(meetingID: session.meetingID) != nil)
+        var warnings: [String] = []
+        for await case .warning(let warning) in events { warnings.append(warning) }
+        #expect(warnings.contains { $0.hasPrefix("Title generation failed:") })
+    }
+
+    @Test func emptyMeetingKeepsItsTitle() async throws {
+        let store = MemoryStore()
+        var env = environment(store, sources: [FakeAudioSource(.mic, seconds: 0)])
+        env.titleGenerator = FakeTitleGenerator()
+        let session = MeetingSession(meeting: Meeting(title: "Original"), scope: .allApps, environment: env)
+        try await session.start()
+        await session.stop()
+        #expect(await store.meeting(id: session.meetingID)?.title == "Original")
+    }
+
     private func environment(_ store: MemoryStore, sources: [any AudioSource], summarizer: any MeetingSummarizer = EchoSummarizer()) -> SessionEnvironment {
         SessionEnvironment(
             makeSources: { _ in sources }, transcriber: FakeTranscriptionProvider(segmentDuration: 2), summarizer: summarizer,
@@ -138,7 +367,9 @@ private struct StubbornTranscriber: TranscriptionProvider {
         let events = session.events()
         try await session.start()
         let deadline = ContinuousClock.now + .seconds(2)
-        while await provider.attempts.counts[.mic, default: 0] < 2, ContinuousClock.now < deadline {
+        while ContinuousClock.now < deadline {
+            let counts = await provider.attempts.counts
+            if counts[.mic, default: 0] >= 2, counts[.system, default: 0] >= 1 { break }
             try await Task.sleep(for: .milliseconds(5))
         }
         #expect(await provider.attempts.counts[.mic] == 2)

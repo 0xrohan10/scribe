@@ -16,7 +16,6 @@ enum UITestingMode {
     }()
 
     static func makeModel(in dir: URL) -> AppModel {
-        UserDefaults(suiteName: "scribe.preview")!.removePersistentDomain(forName: "scribe.preview")
         var settings = AppSettings()
         settings.transcriptionProviderID = "fake"
         settings.promptWhenMeetingDetected = false

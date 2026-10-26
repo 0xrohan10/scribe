@@ -18,6 +18,7 @@ public enum SessionEvent: Sendable {
     case segmentRemoved(UUID)
     case transcriptionStatus(AudioChunk.Source, TranscriptionStatus)
     case summary(MeetingSummary)
+    case title(String)
     /// Non-fatal problems, e.g. the system tap failed but the mic is still recording.
     case warning(String)
 }
@@ -36,6 +37,7 @@ public struct SessionEnvironment: Sendable {
     public var makeSources: @Sendable (SystemAudioScope) -> [any AudioSource]
     public var transcriber: any TranscriptionProvider
     public var summarizer: (any MeetingSummarizer)?
+    public var titleGenerator: (any MeetingTitleGenerator)?
     public var meetings: any MeetingRepository
     public var transcripts: any TranscriptRepository
     public var notes: any NoteRepository
@@ -56,11 +58,13 @@ public struct SessionEnvironment: Sendable {
         summaries: any SummaryRepository,
         vocabulary: Vocabulary = Vocabulary(),
         drainTimeout: Duration = .seconds(15),
-        recoveryPolicy: TranscriptionRecoveryPolicy = TranscriptionRecoveryPolicy()
+        recoveryPolicy: TranscriptionRecoveryPolicy = TranscriptionRecoveryPolicy(),
+        titleGenerator: (any MeetingTitleGenerator)? = nil
     ) {
         self.makeSources = makeSources
         self.transcriber = transcriber
         self.summarizer = summarizer
+        self.titleGenerator = titleGenerator
         self.meetings = meetings
         self.transcripts = transcripts
         self.notes = notes
@@ -95,6 +99,8 @@ public actor MeetingSession {
     private var systemAudioEnded = false
     /// `stop()` arrived while sources were still starting; `start()` stops once they're up.
     private var stopRequested = false
+    private var hasSavedTitle = false
+    private var titleWrite: Task<Void, Error>?
     /// Callers of `stopCapture()` waiting for audio to be released.
     private var captureWaiters: [CheckedContinuation<Void, Never>] = []
 
@@ -115,12 +121,31 @@ public actor MeetingSession {
 
     public func setTemplate(_ templateID: String) async {
         meeting.templateID = templateID
-        try? await env.meetings.save(meeting)
+        try? await env.meetings.setTemplate(id: meetingID, to: templateID)
     }
 
-    public func rename(_ title: String) async {
-        meeting.title = title
-        try? await env.meetings.save(meeting)
+    public func rename(_ title: String) async throws {
+        let title = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !title.isEmpty else { throw CocoaError(.formatting) }
+        try await saveTitle(title, manually: true)
+    }
+
+    private func saveTitle(_ title: String, manually: Bool) async throws {
+        let previous = titleWrite
+        let write = Task {
+            // A failed write must not prevent the next title from being saved.
+            _ = try? await previous?.value
+            guard manually || !hasSavedTitle else { return }
+            try await env.meetings.rename(id: meetingID, to: title)
+            meeting.title = title
+            if manually {
+                hasSavedTitle = true
+            } else {
+                broadcaster.send(.title(title))
+            }
+        }
+        titleWrite = write
+        try await write.value
     }
 
     /// A correction made mid-meeting: rewrites what's been said so far and everything still to come.
@@ -193,11 +218,23 @@ public actor MeetingSession {
         let leftovers = transcript.segments.filter { !$0.isFinal }.map { var s = $0; s.isFinal = true; return s }
         for segment in leftovers { await receive(segment) }
 
-        meeting.endedAt = .now
-        try? await env.meetings.save(meeting)
+        let endedAt = Date.now
+        meeting.endedAt = endedAt
+        try? await env.meetings.finish(id: meetingID, at: endedAt)
 
-        if let summarizer = env.summarizer, !transcript.isEmpty {
+        if !transcript.isEmpty, env.summarizer != nil || env.titleGenerator != nil {
             transition(to: .summarizing)
+        }
+        if let generator = env.titleGenerator, !transcript.isEmpty, !hasSavedTitle {
+            do {
+                let title = try await generator.title(meeting: meeting, transcript: transcript)
+                    .trimmingCharacters(in: .whitespacesAndNewlines)
+                if !title.isEmpty { try await saveTitle(title, manually: false) }
+            } catch {
+                broadcaster.send(.warning("Title generation failed: \(error.localizedDescription)"))
+            }
+        }
+        if let summarizer = env.summarizer, !transcript.isEmpty {
             do {
                 let notes = try await env.notes.notes(meetingID: meetingID)
                 let summary = try await summarizer.summarize(meeting: meeting, transcript: transcript, notes: notes)

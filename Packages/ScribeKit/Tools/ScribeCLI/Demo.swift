@@ -75,6 +75,7 @@ struct Demo: AsyncParsableCommand {
                 case .segmentRemoved(let id): log("echo removed \(id)")
                 case .transcriptionStatus(let source, let status): log("\(source.rawValue): \(status)")
                 case .summary: log("summary  saved")
+                case .title(let title): log("title    \(title)")
                 case .warning(let message): log("warning  \(message)")
                 }
             }

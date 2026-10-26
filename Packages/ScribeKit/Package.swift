@@ -1,7 +1,7 @@
 // swift-tools-version: 6.0
 import PackageDescription
 
-let domains = ["Core", "Capture", "Detection", "Transcription", "Intelligence", "Notes", "Session", "Persistence", "Settings"]
+let domains = ["Core", "Capture", "Detection", "Transcription", "Intelligence", "Notes", "Session", "Persistence", "Settings", "GoogleCalendar"]
 
 let package = Package(
     name: "ScribeKit",
@@ -31,6 +31,7 @@ let package = Package(
         .target(name: "Session", dependencies: ["Core"]),
         .target(name: "Persistence", dependencies: ["Core", .product(name: "GRDB", package: "GRDB.swift")]),
         .target(name: "Settings", dependencies: ["Core"]),
+        .target(name: "GoogleCalendar", dependencies: ["Core"]),
         // Fake audio and LLM for the `scribe` CLI and the app's UI-testing mode. No domain depends on it.
         .target(name: "Fixtures", dependencies: ["Core"]),
 
@@ -56,5 +57,6 @@ let package = Package(
         .testTarget(name: "SessionTests", dependencies: ["Core", "Session", "Transcription"]),
         .testTarget(name: "PersistenceTests", dependencies: ["Core", "Persistence"]),
         .testTarget(name: "SettingsTests", dependencies: ["Core", "Settings"]),
+        .testTarget(name: "GoogleCalendarTests", dependencies: ["GoogleCalendar"]),
     ]
 )

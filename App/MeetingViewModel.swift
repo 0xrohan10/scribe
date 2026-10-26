@@ -28,6 +28,8 @@ final class MeetingViewModel: Identifiable {
     private(set) var messages: [ChatMessage] = []
     private(set) var summary: MeetingSummary?
     private(set) var isRegenerating = false
+    var titleDraft: String
+    private(set) var isSavingTitle = false
     private(set) var transcriptionStatuses: [AudioChunk.Source: TranscriptionStatus] = [:]
     var warnings: [String] = []
     /// The note whose moment the transcript is showing.
@@ -38,6 +40,9 @@ final class MeetingViewModel: Identifiable {
     @ObservationIgnored private let qa: QAEngine?
     @ObservationIgnored private let summarizer: LLMSummarizer?
     @ObservationIgnored private let summaries: any SummaryRepository
+    @ObservationIgnored private let meetings: (any MeetingRepository)?
+    /// Ignores generated-title events queued before a successful manual save.
+    @ObservationIgnored private var hasSavedTitle = false
     /// Where a reviewed meeting's corrected transcript is saved; a live one's session saves its own.
     @ObservationIgnored private let transcripts: (any TranscriptRepository)?
     /// Saves a correction to the user's vocabulary. Without one, the chat can't fix the transcript.
@@ -61,17 +66,19 @@ final class MeetingViewModel: Identifiable {
 
     init(
         meeting: Meeting, session: MeetingSession?, notes: NotesController, qa: QAEngine?, summarizer: LLMSummarizer?,
-        summaries: any SummaryRepository, transcripts: (any TranscriptRepository)? = nil,
+        summaries: any SummaryRepository, transcripts: (any TranscriptRepository)? = nil, meetings: (any MeetingRepository)? = nil,
         learn: (@MainActor (_ term: String, _ heardAs: String) throws -> VocabularyEntry)? = nil,
         state: SessionState = .idle, clock: SessionClock? = nil, onFinish: @escaping () -> Void = {}
     ) {
         self.id = meeting.id
         self.meeting = meeting
+        self.titleDraft = meeting.title
         self.session = session
         self.notesController = notes
         self.qa = qa
         self.summarizer = summarizer
         self.summaries = summaries
+        self.meetings = meetings
         self.transcripts = transcripts
         self.learn = learn
         self.state = state
@@ -88,11 +95,12 @@ final class MeetingViewModel: Identifiable {
     /// Loads a finished meeting for review.
     static func review(
         _ meeting: Meeting, transcripts: any TranscriptRepository, noteRepository: any NoteRepository, summaries: any SummaryRepository,
-        qa: QAEngine?, summarizer: LLMSummarizer?, learn: (@MainActor (_ term: String, _ heardAs: String) throws -> VocabularyEntry)? = nil
+        qa: QAEngine?, summarizer: LLMSummarizer?, meetings: (any MeetingRepository)? = nil,
+        learn: (@MainActor (_ term: String, _ heardAs: String) throws -> VocabularyEntry)? = nil
     ) async throws -> MeetingViewModel {
         let notes = NotesController(meetingID: meeting.id, clock: SessionClock(), repository: noteRepository)
         let vm = MeetingViewModel(
-            meeting: meeting, session: nil, notes: notes, qa: qa, summarizer: summarizer, summaries: summaries, transcripts: transcripts,
+            meeting: meeting, session: nil, notes: notes, qa: qa, summarizer: summarizer, summaries: summaries, transcripts: transcripts, meetings: meetings,
             learn: learn, state: .finished)
         vm.transcript = Transcript(segments: try await transcripts.segments(meetingID: meeting.id))
         vm.notes = try await notes.load()
@@ -129,17 +137,44 @@ final class MeetingViewModel: Identifiable {
         case .state(let s):
             state = s
             if s == .finished { onFinish() }
+            if case .failed = s { onFinish() }
         case .segment(let segment): transcript.upsert(segment)
         case .segmentRemoved(let id): transcript.remove(id: id)
         case .transcriptionStatus(let source, let status): transcriptionStatuses[source] = status
         case .summary(let s): summary = s
+        case .title(let title):
+            guard !hasSavedTitle else { return }
+            if titleDraft == meeting.title { titleDraft = title }
+            meeting.title = title
         case .warning(let w): warnings.append(w)
         }
     }
 
-    func rename(_ title: String) {
-        meeting.title = title
-        Task { await session?.rename(title) }
+    var canSaveTitle: Bool {
+        state != .idle && state != .starting && !isSavingTitle
+            && !titleDraft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && titleDraft != meeting.title
+    }
+
+    func saveTitle() async {
+        guard canSaveTitle else { return }
+        let draft = titleDraft
+        let title = draft.trimmingCharacters(in: .whitespacesAndNewlines)
+        isSavingTitle = true
+        defer { isSavingTitle = false }
+        do {
+            if let session {
+                try await session.rename(title)
+            } else if let meetings {
+                try await meetings.rename(id: id, to: title)
+            } else {
+                throw CocoaError(.fileWriteUnknown)
+            }
+            hasSavedTitle = true
+            meeting.title = title
+            if titleDraft == draft { titleDraft = title }
+        } catch {
+            warnings.append("Couldn't save title: \(error.localizedDescription)")
+        }
     }
 
     func setTemplate(_ id: String) {

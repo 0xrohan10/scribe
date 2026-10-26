@@ -156,3 +156,7 @@ public struct SummaryTemplate: Sendable, Identifiable, Hashable, Codable {
 public protocol MeetingSummarizer: Sendable {
     func summarize(meeting: Meeting, transcript: Transcript, notes: [Note]) async throws -> MeetingSummary
 }
+
+public protocol MeetingTitleGenerator: Sendable {
+    func title(meeting: Meeting, transcript: Transcript) async throws -> String
+}

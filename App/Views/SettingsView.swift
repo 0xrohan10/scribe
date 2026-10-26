@@ -47,6 +47,7 @@ struct SettingsView: View {
                         .font(.system(size: 12)).foregroundStyle(Theme.secondary)
                 }
                 VocabularySection(vocabulary: $model.settings.vocabulary)
+                CalendarSettingsSection(model: model.calendars)
                 PermissionsSection()
                 AboutSection()
             }

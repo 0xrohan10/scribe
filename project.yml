@@ -86,9 +86,35 @@ targets:
         product: Persistence
       - package: ScribeKit
         product: Settings
+      - package: ScribeKit
+        product: GoogleCalendar
       # Fakes for the DEBUG-only --ui-testing mode.
       - package: ScribeKit
         product: Fixtures
+
+  ScribeTests:
+    type: bundle.unit-test
+    platform: macOS
+    sources:
+      - Tests
+      - App/CalendarModel.swift
+      - App/MeetingViewModel.swift
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
+    dependencies:
+      - package: ScribeKit
+        product: Core
+      - package: ScribeKit
+        product: Intelligence
+      - package: ScribeKit
+        product: Notes
+      - package: ScribeKit
+        product: Session
+      - package: ScribeKit
+        product: Persistence
+      - package: ScribeKit
+        product: GoogleCalendar
 
 schemes:
   Scribe:
@@ -97,5 +123,8 @@ schemes:
         Scribe: all
     run:
       config: Debug
+    test:
+      targets:
+        - ScribeTests
     archive:
       config: Release

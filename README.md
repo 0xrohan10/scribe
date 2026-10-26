@@ -9,9 +9,11 @@ Meeting notes for macOS. Live transcripts, summaries, and todos, without a bot j
 
 - Transcribe both sides on your Mac with Apple SpeechAnalyzer, WhisperKit, or Cohere Transcribe.
 - Take timestamped notes and get a summary with decisions and action items.
+- Get an AI-generated title when recording ends, or edit the title and choose **Save**.
 - Manage meeting follow-ups and personal tasks in Todos.
 - Ask questions across saved meetings with citations.
 - Organize calls with folders and tags.
+- Connect multiple Google accounts, choose calendars, and start recordings from upcoming events.
 
 <details>
 <summary>More screenshots</summary>
@@ -68,6 +70,6 @@ Build and run in Xcode. In Settings, choose a transcriber and configure an AI pr
 
 ## Privacy
 
-Meeting text and todos stay in a local SQLite database. New meetings do not save audio. Q&A and summaries send text to your selected AI provider. Get any required consent before capturing a call.
+Meeting text and todos stay in a local SQLite database. New meetings do not save audio. Q&A, summaries, and automatic titles send text to your selected AI provider. Get any required consent before capturing a call.
 
 [Setup, development, and release guide](docs/guide.md) · [MIT License](LICENSE) · [Third-party notices](THIRD_PARTY_NOTICES.md)
